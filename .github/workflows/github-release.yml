@@ -1148,6 +1148,9 @@ jobs:
             {
               cat /tmp/standard-body.md
               echo ""
+              echo "> [!WARNING]"
+              echo "> Parts of these release notes were generated with AI and may contain mistakes or inaccuracies. Please verify important details against the actual commits, pull requests, and source changes."
+              echo ""
               echo "$AI_BODY"
               echo ""
               echo "---"
