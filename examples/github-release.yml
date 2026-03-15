@@ -1,0 +1,52 @@
+# GitHub Release Workflow Example
+# Copy this file to .github/workflows/ in your repository and configure as needed.
+# Configure GitHub Variables for organization-wide settings (see documentation).
+# Current Version: https://github.com/owndev-public/workflows/blob/main/examples/github-release.yml
+#
+# QUICK START:
+# 1. Configure GitHub Variables for your release settings (see documentation)
+# 2. Push to main/master branches or create tags to trigger releases
+# 3. Workflow automatically uses GitVersion for semantic versioning
+# 4. Environment-aware releases (Development/Staging/Production)
+#
+# AI RELEASE NOTES (optional):
+# 1. Set RELEASE_AI_ENABLED = "true" (GitHub Variable)
+# 2. Ensure the calling workflow has 'permissions: models: read' (GITHUB_TOKEN is used by default)
+#    Alternatively, create a RELEASE_AI_TOKEN secret with a PERSONAL PAT (models:read scope)
+#    Note: Organization-scoped PATs do NOT work (403) — only personal PATs or GITHUB_TOKEN
+# 3. Create "Release-Review" GitHub Environment with Required Reviewers
+# 4. Optionally configure: RELEASE_AI_MODEL, RELEASE_AI_LANGUAGE, RELEASE_AI_TEMPERATURE
+# See: https://github.com/owndev-public/workflows/blob/main/README.md
+#
+# FEATURES: GitVersion integration, Environment support, Automatic versioning,
+#            AI-generated release notes (optional), Review approval workflow
+
+name: 🏷️ GitHub Release
+
+permissions:
+  contents: write
+  actions: read
+  discussions: write
+  models: read
+
+# Prevent concurrent runs on same ref
+concurrency:
+  group: github-release-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    tags: ["v*"] # Trigger on version tags (e.g., v1.0.0)
+    # branches: ["release/**", "dev", "develop"]
+
+  # All shared configuration is handled via GitHub Variables
+  workflow_dispatch:
+
+# https://github.com/owndev-public/workflows/tree/main/.github/workflows/github-release.yml
+jobs:
+  # Create GitHub Release with GitVersion and Environment support
+  # Optional: AI-generated release notes with review approval
+  create-release:
+    name: 🏷️ Create GitHub Release
+    uses: owndev-public/workflows/.github/workflows/github-release.yml@main
+    secrets: inherit # Inherit secrets from the repository

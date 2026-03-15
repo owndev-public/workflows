@@ -1,0 +1,301 @@
+# 🏷️ GitVersion Badge Workflow
+#
+# Automatically creates GitVersion badges as SVG files and uploads them to a central badge repository
+# Fully GitHub Variables-based - no parameters required
+# Supports GitFlow branching strategy with branch-specific badges and intelligent naming
+#
+# 🔧 Required GitHub Variables:
+#   GITVERSION_BADGE_REPO            - Target repository for badge storage (format: owner/repo)
+#
+# 🔧 Required GitHub Secrets:
+#   GITVERSION_BADGE_REPO_TOKEN      - GitHub Personal Access Token with repo access to vars.GITVERSION_BADGE_REPO
+#
+# 🔧 Optional GitHub Variables:
+#   GITVERSION_BADGE_LABEL           - Badge label text (default: branch name)
+#   GITVERSION_BADGE_COLOR           - Badge color hex code (default: branch-specific)
+#   GITVERSION_BADGE_STYLE           - Badge style (default: 'classic')
+#
+# 📝 Usage:
+#   1. Set GITVERSION_BADGE_REPO variable to target repository (e.g., "owndev-public/badges")
+#   2. Create a Personal Access Token with 'repo' scope for vars.GITVERSION_BADGE_REPO
+#   3. Add the token as GITVERSION_BADGE_REPO_TOKEN secret
+#   4. Badge will be automatically created and uploaded to central repository
+#
+# Badge Repository Structure:
+#   vars.GITVERSION_BADGE_REPO/docs/
+#   ├── {organization-name}/
+#   │   └── {repo-name}/
+#   │       └── version/
+#   │          ├── main.svg
+#   │          ├── dev.svg
+#   │          ├── release.svg
+#   │          ├── feature.svg
+#   │          ├── hotfix.svg
+#   │          └── {custom-branch}.svg
+#
+# 🔗 Badge URL Pattern:
+#   https://{badge-repo-owner}.github.io/{badge-repo-name}/{organization-name}/{repo-name}/version/{branch}.svg
+#
+# 📋 Example Configuration & URLs:
+#   GITVERSION_BADGE_REPO = "owndev-public/badges"
+#   Badge URL: https://owndev-public.github.io/badges/owndev-public/workflows/version/main.svg
+#   Markdown: ![Version Badge](https://owndev-public.github.io/badges/owndev-public/workflows/version/main.svg)
+#
+# 🌿 GitFlow Branch Colors and Labels:
+#   main/master    - #22C55E (green)    - Label: 'main'/'master'
+#   dev/develop    - #3B82F6 (blue)     - Label: 'dev'
+#   release/*      - #F59E0B (amber)    - Label: 'release'
+#   hotfix/*       - #EF4444 (red)      - Label: 'hotfix'
+#   feature/*      - #8B5CF6 (violet)   - Label: 'feature'
+#   other          - #64748B (slate)    - Label: branch name
+
+name: 🏷️ GitVersion Badge
+
+permissions:
+  contents: read
+
+# Prevent concurrent runs on same ref (configured in the calling workflow)
+#concurrency:
+#  group: gitversion-badge-reusable-${{ github.ref }}
+#  cancel-in-progress: true
+
+on:
+  push:
+    branches: ["main", "master", "dev", "develop"]
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  gitversion-badge:
+    name: 🏷️ Create GitVersion Badge
+    runs-on: ubuntu-latest
+
+    steps:
+      # ✅ Repository Checkout
+      - name: 📂 Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # Required for GitVersion
+
+      # ✅ Install GitVersion
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@1926e472ec11678401f0ad64d1dd112d2b5a987f
+        with:
+          versionSpec: ${{ vars.GITVERSION_VERSION_SPEC }}
+          preferLatestVersion: true
+
+      # ✅ GitVersion Calculate
+      - name: 🔍 Determine version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@1926e472ec11678401f0ad64d1dd112d2b5a987f
+
+      # ✅ GitFlow Branch Color and Name Logic
+      - name: 🎨 Determine GitFlow Badge Configuration
+        id: badge-config
+        run: |
+          # Get branch name - use GitVersion branchName for tags, github.ref_name for branches
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            branch_name="${{ steps.gitversion.outputs.branchName }}"
+            echo "Tag detected - using GitVersion branch name: $branch_name"
+          else
+            branch_name="${{ github.ref_name }}"
+            echo "Branch detected - using ref name: $branch_name"
+          fi
+
+          echo "Processing branch: $branch_name"
+
+          # Default color from variables or GitFlow-based
+          default_color="${{ vars.GITVERSION_BADGE_COLOR }}"
+
+          # Determine badge filename and label based on branch type
+          case "$branch_name" in
+            main|master)
+              badge_filename="main"
+              badge_label="${{ vars.GITVERSION_BADGE_LABEL || 'main' }}"
+              color="${default_color:-22C55E}"  # green - production releases
+              ;;
+            dev|develop)
+              badge_filename="dev"
+              badge_label="${{ vars.GITVERSION_BADGE_LABEL || 'dev' }}"
+              color="${default_color:-3B82F6}"  # blue - development releases
+              ;;
+            release/*)
+              badge_filename="release"
+              badge_label="${{ vars.GITVERSION_BADGE_LABEL || 'release' }}"
+              color="${default_color:-F59E0B}"  # amber - release candidates
+              ;;
+            hotfix/*)
+              badge_filename="hotfix"
+              badge_label="${{ vars.GITVERSION_BADGE_LABEL || 'hotfix' }}"
+              color="${default_color:-EF4444}"  # red - hotfix releases
+              ;;
+            feature/*)
+              badge_filename="feature"
+              badge_label="${{ vars.GITVERSION_BADGE_LABEL || 'feature' }}"
+              color="${default_color:-8B5CF6}"  # violet - feature branches
+              ;;
+            *)
+              badge_filename="$branch_name"
+              badge_label="${{ vars.GITVERSION_BADGE_LABEL || '$branch_name' }}"
+              color="${default_color:-64748B}"  # slate - other branches
+              ;;
+          esac
+
+          echo "Determined configuration:"
+          echo "  Badge filename: $badge_filename"
+          echo "  Badge label: $badge_label"
+          echo "  Badge color: $color"
+          echo "  Original branch: $branch_name"
+          echo "  GitHub ref: ${{ github.ref }}"
+          echo "  GitHub ref_name: ${{ github.ref_name }}"
+
+          echo "filename=$badge_filename" >> $GITHUB_OUTPUT
+          echo "label=$badge_label" >> $GITHUB_OUTPUT
+          echo "color=$color" >> $GITHUB_OUTPUT
+          echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
+
+      # ✅ Create Badge with emibcn/badge-action V2.0.3
+      - name: 🏷️ Create GitVersion Badge
+        uses: emibcn/badge-action@808173dd03e2f30c980d03ee49e181626088eee8
+        id: badge
+        with:
+          label: ${{ steps.badge-config.outputs.label }}
+          label-color: 555
+          status: "v${{ steps.gitversion.outputs.SemVer }}"
+          color: ${{ steps.badge-config.outputs.color }}
+          style: ${{ vars.GITVERSION_BADGE_STYLE || 'classic' }}
+          path: version-badge.svg
+
+      # ✅ Checkout Central Badge Repository
+      - name: 📂 Checkout Badge Repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ vars.GITVERSION_BADGE_REPO }}
+          token: ${{ secrets.GITVERSION_BADGE_REPO_TOKEN }}
+          ref: main
+          path: badge-repo
+
+      # ✅ Prepare Badge Directory Structure
+      - name: 📁 Create Badge Directory Structure
+        run: |
+          org_name="${{ github.repository_owner }}"
+          repo_name="${{ github.event.repository.name }}"
+          badge_filename="${{ steps.badge-config.outputs.filename }}.svg"
+
+          echo "Organization name: $org_name"
+          echo "Repository name: $repo_name"
+          echo "Badge filename: $badge_filename"
+
+          # Create directory structure: {org-name}/{repo-name}/version/
+          mkdir -p "badge-repo/docs/${org_name}/${repo_name}/version"
+
+          # Copy the generated badge to the correct location
+          cp version-badge.svg "badge-repo/docs/${org_name}/${repo_name}/version/${badge_filename}"
+
+          echo "Badge copied to: badge-repo/docs/${org_name}/${repo_name}/version/${badge_filename}"
+
+      # ✅ Commit and Push Badge to Central Repository
+      - name: 📤 Commit and Push Badge
+        run: |
+          cd badge-repo
+
+          org_name="${{ github.repository_owner }}"
+          repo_name="${{ github.event.repository.name }}"
+          badge_filename="${{ steps.badge-config.outputs.filename }}.svg"
+          branch_name="${{ steps.badge-config.outputs.branch_name }}"
+          version="${{ steps.gitversion.outputs.SemVer }}"
+          ref_type="${{ startsWith(github.ref, 'refs/tags/') && 'tag' || 'branch' }}"
+
+          # Configure Git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Add and commit changes
+          git add .
+
+          # Create meaningful commit message
+          if git diff --staged --quiet; then
+            echo "No changes to commit - badge already up to date"
+          else
+            git commit -m "Update ${badge_filename} for ${org_name}/${repo_name} - v${version} (${branch_name} ${ref_type})"
+            git push
+            echo "Badge successfully pushed to central repository"
+          fi
+
+      # ✅ Badge Summary Output
+      - name: 📋 Generate Badge Summary
+        env:
+          GITVERSION_BADGE_REPO: ${{ vars.GITVERSION_BADGE_REPO }}
+          GITVERSION_BADGE_STYLE: ${{ vars.GITVERSION_BADGE_STYLE || 'classic' }}
+        run: |
+          # Extract badge repository info for URL generation
+          badge_repo="$GITVERSION_BADGE_REPO"
+          badge_org=$(echo "$badge_repo" | cut -d'/' -f1)
+          badge_repo_name=$(echo "$badge_repo" | cut -d'/' -f2)
+
+          # Generate GitHub Pages URL based on badge repository
+          badge_base_url="https://${badge_org}.github.io/${badge_repo_name}"
+
+          # Generate comprehensive summary
+          {
+            echo "# 🏷️ GitVersion Badge Created"
+            echo ""
+            echo "![Version Badge](${badge_base_url}/${{ github.repository_owner }}/${{ github.event.repository.name }}/version/${{ steps.badge-config.outputs.filename }}.svg)"
+            echo ""
+            echo "## 📊 Version Information"
+            echo "| Property | Value |"
+            echo "|----------|-------|"
+            echo "| **Semantic Version** | \`${{ steps.gitversion.outputs.semVer }}\` |"
+            echo "| **Full Semantic Version** | \`${{ steps.gitversion.outputs.fullSemVer }}\` |"
+            echo "| **Assembly Version** | \`${{ steps.gitversion.outputs.assemblySemVer }}\` |"
+            echo "| **Informational Version** | \`${{ steps.gitversion.outputs.informationalVersion }}\` |"
+            echo "| **Major.Minor.Patch** | \`${{ steps.gitversion.outputs.majorMinorPatch }}\` |"
+            echo "| **PreRelease Label** | \`${{ steps.gitversion.outputs.preReleaseLabel }}\` |"
+            echo "| **PreRelease Number** | \`${{ steps.gitversion.outputs.preReleaseNumber }}\` |"
+            echo "| **Commits Since Version Source** | \`${{ steps.gitversion.outputs.commitsSinceVersionSource }}\` |"
+            echo "| **Weighted PreRelease Number** | \`${{ steps.gitversion.outputs.weightedPreReleaseNumber }}\` |"
+            echo "| **Branch Type** | \`${{ steps.gitversion.outputs.branchType }}\` |"
+            echo "| **Branch Name** | \`${{ steps.gitversion.outputs.branchName }}\` |"
+            echo "| **Commit SHA** | [\`${{ steps.gitversion.outputs.sha }}\`](https://github.com/${{ github.repository }}/commit/${{ steps.gitversion.outputs.sha }}) |"
+            echo ""
+            echo "## 🏷️ Badge Information"
+            echo "| Property | Value |"
+            echo "|----------|-------|"
+            echo "| **Badge Filename** | \`${{ steps.badge-config.outputs.filename }}.svg\` |"
+            echo "| **Badge Color** | \`${{ steps.badge-config.outputs.color }}\` |"
+            echo "| **Badge Label** | \`${{ steps.badge-config.outputs.label }}\` |"
+            echo "| **Badge Message** | \`v${{ steps.gitversion.outputs.semVer }}\` |"
+            echo "| **Badge Style** | \`$GITVERSION_BADGE_STYLE\` |"
+            echo "| **Badge Repository** | \`$GITVERSION_BADGE_REPO\` |"
+            echo "| **Original Branch** | \`${{ github.ref_name }}\` |"
+            echo ""
+            echo "## 🔗 Badge Usage"
+            echo ""
+            echo "### Direct SVG URL"
+            echo "\`\`\`"
+            echo "${badge_base_url}/${{ github.repository_owner }}/${{ github.event.repository.name }}/version/${{ steps.badge-config.outputs.filename }}.svg"
+            echo "\`\`\`"
+            echo ""
+            echo "### Markdown for README.md"
+            echo "\`\`\`markdown"
+            echo "![Version Badge](${badge_base_url}/${{ github.repository_owner }}/${{ github.event.repository.name }}/version/${{ steps.badge-config.outputs.filename }}.svg)"
+            echo "\`\`\`"
+            echo ""
+            echo "### HTML"
+            echo "\`\`\`html"
+            echo "<img src=\"${badge_base_url}/${{ github.repository_owner }}/${{ github.event.repository.name }}/version/${{ steps.badge-config.outputs.filename }}.svg\" alt=\"Version Badge\" />"
+            echo "\`\`\`"
+            echo ""
+            echo "## 🌿 GitFlow Branch Colors"
+            echo "| Branch Pattern | Color | Hex Code | Purpose |"
+            echo "|----------------|-------|----------|---------|"
+            echo "| \`main\`/\`master\` | 🟢 Green | \`#22C55E\` | Production releases |"
+            echo "| \`dev\`/\`develop\` | 🔵 Blue | \`#3B82F6\` | Development releases |"
+            echo "| \`release/*\` | 🟠 Amber | \`#F59E0B\` | Release candidates |"
+            echo "| \`hotfix/*\` | 🔴 Red | \`#EF4444\` | Hotfix releases |"
+            echo "| \`feature/*\` | 🟣 Violet | \`#8B5CF6\` | Feature branches |"
+            echo "| Other | ⚫ Slate | \`#64748B\` | Other branches |"
+            echo ""
+            echo "---"
+            echo "*Badge generated on $(date -u '+%Y-%m-%d %H:%M:%S UTC') by [GitVersion Badge Workflow](https://github.com/owndev-public/workflows/blob/main/.github/workflows/gitversion-badge.yml)*"
+          } >> $GITHUB_STEP_SUMMARY

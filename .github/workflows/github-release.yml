@@ -1,0 +1,1107 @@
+# Reusable GitHub Release Workflow
+# This is a comprehensive, production-ready workflow for creating GitHub releases
+# with support for automatic release notes generation, artifact uploads, and flexible configuration.
+#
+# WORKFLOW OVERVIEW:
+# This reusable workflow provides a simple yet powerful way to create GitHub releases
+# with uploaded artifacts, automatic release notes, and environment-aware configuration.
+# Supports both stable releases and pre-releases with comprehensive metadata.
+#
+# KEY FEATURES:
+# - Automatic GitHub release creation with customizable metadata
+# - Artifact upload support from previous workflow jobs
+# - Environment-aware configuration (Development, Staging, Production)
+# - Automatic release notes generation from commit history
+# - Support for both stable and pre-release versions
+# - Customizable release body with repository and build information
+# - GitHub Variables support for organization-wide configuration
+# - Flexible artifact handling with pattern matching
+# - Draft release support for review workflows
+# - Comprehensive release metadata and build information
+#
+# GITHUB VARIABLES SUPPORT:
+# This workflow is designed to work seamlessly with GitHub Variables for organization-wide
+# configuration management. All major settings can be controlled via variables set at the
+# Organization, Repository, or Environment level.
+#
+# === GITHUB RELEASE SETTINGS ===
+# RELEASE_GITHUB_USE_GITVERSION: Enable GitVersion for automatic versioning ("true", "false")
+#   - When enabled, automatically calculates semantic versions based on Git history
+#   - Provides version information including SemVer, AssemblySemVer, etc.
+#   - Integrates with branching strategies (GitFlow, GitHubFlow, etc.)
+#   - Default: "true"
+#
+# RELEASE_GITHUB_TAG_NAME: Custom tag name pattern for the release
+#   - Use {version} placeholder for version substitution
+#   - Format: "v{version}" or custom pattern like "release-{version}"
+#   - Example: "v1.0.0", "release-2024.1"
+#   - Default: "v{version}"
+#
+# RELEASE_GITHUB_NAME: Custom release name/title pattern
+#   - Use {version} placeholder for version substitution
+#   - Can include repository name or custom branding
+#   - Example: "MyApp v{version}", "Release {version}"
+#   - Default: "v{version}"
+#
+# RELEASE_GITHUB_DRAFT: Create release as draft ("true", "false")
+#   - When true, release is created but not published
+#   - Allows for review and manual publishing
+#   - Useful for approval workflows
+#   - Default: "false"
+#
+# RELEASE_GITHUB_GENERATE_NOTES: Generate automatic release notes ("true", "false")
+#   - When enabled, GitHub automatically generates release notes from commits
+#   - Uses commit history and pull request information
+#   - Can be combined with custom body content
+#   - Default: "true"
+#
+# RELEASE_GITHUB_APPEND_BODY: Append to auto-generated notes ("true", "false")
+#   - When true, custom body is appended to auto-generated notes
+#   - When false, custom body replaces auto-generated notes
+#   - Only relevant when RELEASE_GITHUB_GENERATE_NOTES is true
+#   - Default: "true"
+#
+# RELEASE_GITHUB_ARTIFACT_PATTERN: Pattern for artifact download
+#   - Glob pattern to match artifacts from previous jobs
+#   - Examples: "release-*", "build-artifacts-*", "*"
+#   - Supports multiple patterns separated by newlines
+#   - Default: "*" (all artifacts)
+#
+# RELEASE_GITHUB_ARTIFACT_PATH: Local path for downloaded artifacts
+#   - Directory where artifacts are downloaded before upload
+#   - Must be relative to workspace root
+#   - Example: "./release-files", "./artifacts"
+#   - Default: "./release-files"
+#
+# RELEASE_GITHUB_FILES_PATTERN: Pattern for files to include in release
+#   - Glob pattern for files to upload to release
+#   - Applied to the artifact path directory
+#   - Examples: "*", "*.zip", "*.exe,*.msi"
+#   - Default: "*" (all files in artifact path)
+#
+# RELEASE_GITHUB_ENVIRONMENT_URL: Custom environment URL
+#   - Override the default environment URL
+#   - Useful for linking to deployment or documentation
+#   - Example: "https://myapp.example.com"
+#   - Default: Repository URL
+#
+# === USAGE PATTERNS ===
+#
+# 1. MINIMAL SETUP (using defaults):
+#    No variables needed - all parameters passed via inputs
+#
+# 2. ORGANIZATION-WIDE DEFAULTS:
+#    Organization Variables:
+#    - RELEASE_GITHUB_GENERATE_NOTES: "true"
+#    - RELEASE_GITHUB_DRAFT: "false"
+#
+# 3. REPOSITORY-SPECIFIC CONFIGURATION:
+#    Repository Variables:
+#    - RELEASE_GITHUB_ARTIFACT_PATTERN: "release-*"
+#    - RELEASE_GITHUB_FILES_PATTERN: "*.zip"
+#
+# 4. ENVIRONMENT-SPECIFIC SETTINGS:
+#    Environment Variables (Development):
+#    - RELEASE_GITHUB_DRAFT: "true"
+#
+# INTEGRATION WITH OTHER WORKFLOWS:
+# This workflow is designed to be called from build workflows after successful
+# compilation and packaging. It handles the final step of creating a public
+# release with all necessary artifacts and documentation.
+#
+# === AI RELEASE NOTES SETTINGS ===
+# RELEASE_AI_ENABLED: Enable AI-generated release notes ("true", "false")
+#   - When enabled, uses GitHub Models API to generate developer-focused release notes
+#   - Optionally uses RELEASE_AI_TOKEN secret (GitHub PAT with models:read scope)
+#   - Uses GitHub Environment with Required Reviewers for approval before publishing
+#   - AI-generated body is combined with GitHub's auto-generated notes (append_body)
+#   - Default: "false"
+#
+# RELEASE_AI_MODEL: GitHub Models model ID for AI generation
+#   - Format: "{publisher}/{model_name}" (e.g., "openai/gpt-4.1", "openai/gpt-4o-mini")
+#   - Must be a model available in the GitHub Models catalog
+#   - Default: "openai/gpt-4.1" (recommended for large releases with many commits)
+#
+# RELEASE_AI_LANGUAGE: Output language for AI-generated release notes
+#   - ISO language code (e.g., "en", "de", "fr", "es")
+#   - Controls the language of the generated summary text
+#   - Default: "en"
+#
+# RELEASE_AI_MAX_TOKENS: Maximum output tokens for AI generation
+#   - Higher values allow longer, more detailed release notes
+#   - Must not exceed the model's context limit
+#   - Default: "4096" (optimized for comprehensive release notes)
+#
+# RELEASE_AI_TEMPERATURE: AI creativity/randomness (0.0 - 1.0)
+#   - Lower values produce more focused, deterministic output
+#   - Higher values produce more creative, varied output
+#   - Default: "0.4" (focused and consistent for release notes)
+#
+# RELEASE_AI_CUSTOM_PROMPT: Custom system prompt override for AI generation
+#   - When set, replaces the default system prompt entirely
+#   - Use for custom formatting, tone, or content requirements
+#   - Test prompts interactively using the .prompt.yml files in the /prompts/ directory
+#   - Default: (built-in prompt optimized for developer-focused release notes)
+#
+# RELEASE_AI_PROJECT_DESCRIPTION: Short description of the project (1-2 sentences)
+#   - Helps the AI model understand the project context for better release notes
+#   - Example: "Enterprise ERP system for manufacturing companies"
+#   - Set at the repository level so each repo describes itself
+#   - If not set, the workflow auto-generates a description from repository docs
+#     (README.md, docs/**/*.md, .github/copilot-instructions.md) using the AI model
+#   - Auto-generated descriptions are cached via actions/cache and regenerated
+#     when documentation files change
+#   - Default: (auto-generated from repository documentation)
+#
+# RELEASE_AI_MAX_COMMITS: Maximum commits to analyze for AI generation
+#   - Limits the number of commits sent to the AI for summarization
+#   - Higher values provide more context but increase token usage
+#   - Default: "500" (handles very large releases)
+#
+# RELEASE_AI_REVIEW_ENVIRONMENT: GitHub Environment name for review approval
+#   - Environment must have Required Reviewers configured
+#   - Workflow pauses at the generate-ai-notes job until a reviewer approves
+#   - Reviewer can inspect the full AI input/output in the Step Summary before approving
+#
+# === SECRETS ===
+# RELEASE_AI_TOKEN: Personal GitHub PAT with models:read scope (optional, falls back to GITHUB_TOKEN)
+#   - Used to authenticate with the GitHub Models inference API via actions/ai-inference
+#   - Only PERSONAL PATs (classic or fine-grained with models:read) are supported
+#   - Organization-scoped PATs will receive HTTP 403 (models:read is a user-level scope)
+#   - If not set, the workflow uses GITHUB_TOKEN which works when the calling workflow
+#     declares 'permissions: models: read' (recommended for enterprise/org billing)
+#   - The calling workflow must use secrets: inherit to pass this secret
+#
+# SECURITY CONSIDERATIONS:
+# - Requires contents: write permission for release creation
+# - Uses GITHUB_TOKEN for authentication (automatically provided)
+# - No sensitive data is exposed in release metadata
+# - Artifacts are downloaded from the same workflow run only
+# - AI generation uses actions/ai-inference for secure GitHub Models API interaction
+# - RELEASE_AI_TOKEN is used for GitHub Models API authentication (falls back to GITHUB_TOKEN)
+
+name: 🏷️ GitHub Release
+
+permissions:
+  contents: write
+  actions: read
+  discussions: write
+  models: read
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  # Determine environment based on branch
+  determine-environment:
+    name: 🌎 Determine Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+
+    steps:
+      - name: 🌿 Determine Environment
+        id: env
+        run: |
+          ref="${GITHUB_REF:-${{ github.ref }}}"
+          if [[ "$ref" == refs/heads/main || "$ref" == refs/heads/master ]]; then
+            env="Production"
+          elif [[ "$ref" == refs/heads/release/* ]]; then
+            env="Staging"
+          elif [[ "$ref" == refs/heads/dev ]]; then
+            env="Development"
+          elif [[ "$ref" == refs/tags/* ]]; then
+            env="Production"
+          else
+            env="Development"
+          fi
+
+          echo "environment=$env" >> "$GITHUB_OUTPUT"
+          echo "Environment determined: $env"
+        shell: bash
+
+  # Calculate version using GitVersion
+  calculate-version:
+    name: 🔢 Calculate Version
+    needs: determine-environment
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.determine-environment.outputs.environment }}
+    outputs:
+      version: ${{ steps.gitversion.outputs.SemVer }}
+      assembly-version: ${{ steps.gitversion.outputs.AssemblySemVer }}
+      informational-version: ${{ steps.gitversion.outputs.InformationalVersion }}
+      is-prerelease: ${{ steps.gitversion.outputs.PreReleaseTag != '' }}
+      pre-release-tag: ${{ steps.gitversion.outputs.PreReleaseTag }}
+      pre-release-number: ${{ steps.gitversion.outputs.PreReleaseNumber }}
+      weighted-pre-release-number: ${{ steps.gitversion.outputs.WeightedPreReleaseNumber }}
+      commits-since-version-source: ${{ steps.gitversion.outputs.CommitsSinceVersionSource }}
+      tag-name: ${{ steps.tag.outputs.tag-name }}
+      release-name: ${{ steps.tag.outputs.release-name }}
+
+    steps:
+      - name: 📂 Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: 🛠️ Install GitVersion
+        if: vars.RELEASE_GITHUB_USE_GITVERSION != 'false'
+        uses: gittools/actions/gitversion/setup@1926e472ec11678401f0ad64d1dd112d2b5a987f
+        with:
+          versionSpec: ${{ vars.GITVERSION_VERSION_SPEC }}
+          preferLatestVersion: true
+
+      - name: 🔢 Determine version
+        if: vars.RELEASE_GITHUB_USE_GITVERSION != 'false'
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@1926e472ec11678401f0ad64d1dd112d2b5a987f
+
+      - name: 🔢 Fallback version calculation
+        if: vars.RELEASE_GITHUB_USE_GITVERSION == 'false'
+        id: fallback-version
+        run: |
+          # Use tag name or generate version from date and commit
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+            version="${version#refs/tags/}"
+          else
+            version="$(date +'%Y.%m.%d')-${GITHUB_SHA:0:7}"
+          fi
+
+          echo "SemVer=$version" >> $GITHUB_OUTPUT
+          echo "AssemblySemVer=$version" >> $GITHUB_OUTPUT
+          echo "InformationalVersion=$version" >> $GITHUB_OUTPUT
+          echo "PreReleaseTag=" >> $GITHUB_OUTPUT
+          echo "CommitsSinceVersionSource=0" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: 🏷️ Calculate tag and release names
+        id: tag
+        env:
+          VERSION: ${{ steps.gitversion.outputs.SemVer || steps.fallback-version.outputs.SemVer }}
+          CUSTOM_TAG_NAME: ${{ vars.RELEASE_GITHUB_TAG_NAME }}
+          CUSTOM_RELEASE_NAME: ${{ vars.RELEASE_GITHUB_NAME }}
+        run: |
+          # Calculate tag name
+          if [[ -n "$CUSTOM_TAG_NAME" ]]; then
+            tag_name="${CUSTOM_TAG_NAME/\{version\}/$VERSION}"
+          else
+            tag_name="v$VERSION"
+          fi
+
+          # Calculate release name
+          if [[ -n "$CUSTOM_RELEASE_NAME" ]]; then
+            release_name="${CUSTOM_RELEASE_NAME/\{version\}/$VERSION}"
+          else
+            release_name="v$VERSION"
+          fi
+
+          echo "tag-name=$tag_name" >> $GITHUB_OUTPUT
+          echo "release-name=$release_name" >> $GITHUB_OUTPUT
+
+          echo "Tag and release names calculated:"
+          echo "  Tag Name: $tag_name"
+          echo "  Release Name: $release_name"
+        shell: bash
+
+  # Generate AI-powered release notes using GitHub Models API
+  # This job uses the Review Environment to pause for approval before the release is created.
+  # Reviewers can inspect the full AI input (system prompt, user prompt, model config)
+  # and the generated output in the Step Summary before approving.
+  generate-ai-notes:
+    name: 🤖 Generate AI Release Notes
+    if: vars.RELEASE_AI_ENABLED == 'true'
+    needs: [determine-environment, calculate-version]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ vars.RELEASE_AI_REVIEW_ENVIRONMENT || needs.determine-environment.outputs.environment }}
+    outputs:
+      ai-body: ${{ steps.process-notes.outputs.ai-body }}
+      ai-generated: ${{ steps.process-notes.outputs.ai-generated }}
+
+    steps:
+      - name: 📂 Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: 📋 Collect Changes Since Last Release
+        id: collect-changes
+        env:
+          MAX_COMMITS: ${{ vars.RELEASE_AI_MAX_COMMITS || '500' }}
+          CURRENT_TAG: ${{ needs.calculate-version.outputs.tag-name }}
+        run: |
+          echo "=== Collecting changes since last release ==="
+          echo "Current release tag: ${CURRENT_TAG:-'(manual dispatch, no tag)'}"
+
+          # Find the previous release tag.
+          # Explicitly exclude the current release tag so that a tag-triggered workflow
+          # (where the new tag already exists in the repo) never picks up itself.
+          # Falls back to all versioned tags when no current tag is known (manual dispatch).
+          if [[ -n "$CURRENT_TAG" ]]; then
+            PREV_TAG=$(git tag --sort=-v:refname \
+              | grep -E '^v?[0-9]+(\.[0-9]+)*(-[A-Za-z0-9.]+)?$' \
+              | grep -Fxv "$CURRENT_TAG" \
+              | head -1 || true)
+          else
+            PREV_TAG=$(git tag --sort=-v:refname \
+              | grep -E '^v?[0-9]+(\.[0-9]+)*(-[A-Za-z0-9.]+)?$' \
+              | head -1 || true)
+          fi
+
+          # Determine the end ref for the diff range:
+          # - If the current tag already exists in git (tag-push trigger): compare prev → current tag
+          # - Otherwise (manual dispatch, tag not yet created):            compare prev → HEAD
+          if [[ -n "$CURRENT_TAG" ]] && git rev-parse "$CURRENT_TAG" >/dev/null 2>&1; then
+            END_REF="$CURRENT_TAG"
+            echo "Trigger: tag push (${CURRENT_TAG} exists)"
+          else
+            END_REF="HEAD"
+            echo "Trigger: manual dispatch (comparing to HEAD)"
+          fi
+
+          if [[ -n "$PREV_TAG" ]]; then
+            echo "Previous release tag: $PREV_TAG"
+            RANGE="${PREV_TAG}..${END_REF}"
+          else
+            echo "No previous release tag found — collecting all commits up to ${END_REF}"
+            RANGE="$END_REF"
+          fi
+
+          echo "Commit range: $RANGE"
+
+          # Collect commit messages (no-merge commits)
+          CHANGES=$(git log "$RANGE" --pretty=format:"- %s" --no-merges | head -n "$MAX_COMMITS")
+
+          # Collect PR merge titles
+          PR_MERGES=$(git log "$RANGE" --merges --pretty=format:"- %s" | head -n "$MAX_COMMITS")
+
+          # Get file change statistics
+          if [[ -n "$PREV_TAG" ]]; then
+            STATS=$(git diff --stat "${PREV_TAG}..${END_REF}" 2>/dev/null | tail -1 || echo "No statistics available")
+          else
+            STATS=$(git diff --stat "$(git rev-list --max-parents=0 HEAD)..${END_REF}" 2>/dev/null | tail -1 || echo "No statistics available")
+          fi
+
+          # Save to files for safe processing
+          echo "$CHANGES"      > /tmp/changes.txt
+          echo "$PR_MERGES"    > /tmp/pr_merges.txt
+          echo "$STATS"        > /tmp/stats.txt
+
+          echo "changes-file=/tmp/changes.txt"       >> "$GITHUB_OUTPUT"
+          echo "pr-merges-file=/tmp/pr_merges.txt"   >> "$GITHUB_OUTPUT"
+          echo "stats-file=/tmp/stats.txt"           >> "$GITHUB_OUTPUT"
+          echo "last-tag=$PREV_TAG"                  >> "$GITHUB_OUTPUT"
+
+          COMMIT_COUNT=$(git log "$RANGE" --oneline --no-merges | wc -l)
+          PR_COUNT=$(echo "$PR_MERGES" | grep -c '^- ' || echo "0")
+          echo "Collected ${COMMIT_COUNT} commits and ${PR_COUNT} PR merges for AI analysis"
+
+          # Write Step Summary — collected input data overview
+          {
+            echo "## 📋 AI Release Notes — Input Data"
+            echo ""
+            echo "### 🔍 Change Collection"
+            echo ""
+            echo "| Parameter | Value |"
+            echo "|---|---|"
+            echo "| **Current Tag** | \`${CURRENT_TAG:-'(not yet created)'}\` |"
+            echo "| **Previous Tag** | \`${PREV_TAG:-'(first release)'}\` |"
+            echo "| **Commit Range** | \`${RANGE}\` |"
+            echo "| **Commits Collected** | \`${COMMIT_COUNT}\` |"
+            echo "| **PR Merges Collected** | \`${PR_COUNT}\` |"
+            echo "| **Max Commits Setting** | \`${MAX_COMMITS}\` |"
+            echo "| **File Statistics** | \`$(cat /tmp/stats.txt)\` |"
+            echo ""
+            echo "<details>"
+            echo "<summary>📝 Commits (click to expand)</summary>"
+            echo ""
+            echo '```text'
+            cat /tmp/changes.txt
+            echo '```'
+            echo ""
+            echo "</details>"
+            echo ""
+            echo "<details>"
+            echo "<summary>🔀 PR Merges (click to expand)</summary>"
+            echo ""
+            echo '```text'
+            cat /tmp/pr_merges.txt
+            echo '```'
+            echo ""
+            echo "</details>"
+            echo ""
+          } >> $GITHUB_STEP_SUMMARY
+        shell: bash
+
+      - name: 💾 Restore Project Description Cache
+        id: description-cache
+        if: vars.RELEASE_AI_PROJECT_DESCRIPTION == ''
+        uses: actions/cache@v5
+        with:
+          path: /tmp/project-description-cache
+          key: project-description-${{ hashFiles('README.md', 'docs/**/*.md', '.github/copilot-instructions.md') }}
+
+      - name: 🔍 Resolve Project Description
+        id: resolve-description
+        env:
+          EXPLICIT_DESCRIPTION: ${{ vars.RELEASE_AI_PROJECT_DESCRIPTION }}
+          CACHE_HIT: ${{ steps.description-cache.outputs.cache-hit }}
+        run: |
+          # Tier 1: Explicit variable
+          if [[ -n "$EXPLICIT_DESCRIPTION" ]]; then
+            echo "Using explicit RELEASE_AI_PROJECT_DESCRIPTION variable"
+            # Use delimiter format — value may contain newlines or special characters
+            DELIM="DESC_$(openssl rand -hex 4)"
+            {
+              echo "project-description<<${DELIM}"
+              echo "$EXPLICIT_DESCRIPTION"
+              echo "${DELIM}"
+            } >> "$GITHUB_OUTPUT"
+            echo "description-source=variable" >> "$GITHUB_OUTPUT"
+            echo "needs-ai=false" >> "$GITHUB_OUTPUT"
+
+            # Write Step Summary
+            {
+              echo "### 📚 Project Description"
+              echo ""
+              echo "| Parameter | Value |"
+              echo "|---|---|"
+              echo "| **Source** | \`Tier 1: GitHub Variable\` |"
+              echo "| **Length** | \`${#EXPLICIT_DESCRIPTION} chars\` |"
+              echo ""
+              echo "> $EXPLICIT_DESCRIPTION"
+              echo ""
+            } >> $GITHUB_STEP_SUMMARY
+
+            exit 0
+          fi
+
+          # Tier 2: Cached AI-generated description
+          CACHE_FILE="/tmp/project-description-cache/description.txt"
+          if [[ "$CACHE_HIT" == "true" && -f "$CACHE_FILE" ]]; then
+            echo "Using cached AI-generated project description"
+            CACHED=$(cat "$CACHE_FILE")
+            echo "project-description=$CACHED" >> "$GITHUB_OUTPUT"
+            echo "description-source=ai-cached" >> "$GITHUB_OUTPUT"
+            echo "needs-ai=false" >> "$GITHUB_OUTPUT"
+
+            # Write Step Summary
+            {
+              echo "### 📚 Project Description"
+              echo ""
+              echo "| Parameter | Value |"
+              echo "|---|---|"
+              echo "| **Source** | \`Tier 2: Cached (AI-generated)\` |"
+              echo "| **Cache Key** | \`project-description-${{ hashFiles('README.md', 'docs/**/*.md', '.github/copilot-instructions.md') }}\` |"
+              echo "| **Length** | \`${#CACHED} chars\` |"
+              echo ""
+              echo "> $CACHED"
+              echo ""
+            } >> $GITHUB_STEP_SUMMARY
+
+            exit 0
+          fi
+
+          # Tier 3: Need AI generation — collect documentation
+          echo "Collecting repository documentation for AI summarization..."
+
+          DOC_CONTENT=""
+
+          # Collect README.md (first 200 lines)
+          if [[ -f "README.md" ]]; then
+            DOC_CONTENT+="=== README.md ==="$'\n'
+            DOC_CONTENT+=$(head -200 README.md)$'\n\n'
+          fi
+
+          # Collect docs/**/*.md (first 100 lines each, max 10 files)
+          FILE_COUNT=0
+          while IFS= read -r -d '' doc_file; do
+            if (( FILE_COUNT >= 10 )); then break; fi
+            DOC_CONTENT+="=== ${doc_file} ==="$'\n'
+            DOC_CONTENT+=$(head -100 "$doc_file")$'\n\n'
+            (( ++FILE_COUNT ))
+          done < <(find docs -name '*.md' -type f -print0 2>/dev/null | sort -z)
+
+          # Collect .github/copilot-instructions.md (first 100 lines)
+          if [[ -f ".github/copilot-instructions.md" ]]; then
+            DOC_CONTENT+="=== .github/copilot-instructions.md ==="$'\n'
+            DOC_CONTENT+=$(head -100 .github/copilot-instructions.md)$'\n\n'
+          fi
+
+          if [[ -z "$DOC_CONTENT" ]]; then
+            echo "No documentation files found"
+            echo "project-description=" >> "$GITHUB_OUTPUT"
+            echo "description-source=none" >> "$GITHUB_OUTPUT"
+            echo "needs-ai=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Write prompt files for actions/ai-inference
+          SUMMARIZE_PROMPT="You are a technical writer. Summarize the provided repository documentation into a concise project description.
+
+          Rules:
+          - Write 3-8 sentences
+          - Do NOT use markdown headers, bullet points, or any formatting — plain prose only
+          - Cover: project purpose, target audience, key technologies/frameworks, architecture patterns, and notable integrations
+          - Write in English
+          - Be factual — only describe what is explicitly stated in the documentation
+          - Do NOT include version numbers, installation instructions, or contributing guidelines
+          - The output will be used as context for an AI release notes generator — focus on information that helps interpret code changes"
+          echo "$SUMMARIZE_PROMPT" > /tmp/summarize-system-prompt.txt
+
+          printf 'Summarize the following repository documentation into a concise project description:\n\n%s' "$DOC_CONTENT" > /tmp/summarize-user-prompt.txt
+
+          echo "needs-ai=true" >> "$GITHUB_OUTPUT"
+
+          # Count collected documentation files
+          DOC_CHAR_COUNT=${#DOC_CONTENT}
+          echo "Documentation collected for AI summarization (${DOC_CHAR_COUNT} chars)"
+
+          # Write Step Summary — documentation collected for project description
+          {
+            echo "### 📚 Project Description — AI Summarization Input"
+            echo ""
+            echo "| Parameter | Value |"
+            echo "|---|---|"
+            echo "| **Description Source** | \`Tier 3: AI-generated from docs\` |"
+            echo "| **Documentation Size** | \`${DOC_CHAR_COUNT} chars\` |"
+            echo "| **Model** | \`${{ vars.RELEASE_AI_MODEL || 'openai/gpt-4.1' }}\` |"
+            echo "| **Max Tokens** | \`1024\` |"
+            echo "| **Temperature** | \`0.3\` |"
+            echo ""
+            echo "<details>"
+            echo "<summary>📋 Summarization System Prompt (click to expand)</summary>"
+            echo ""
+            echo '```text'
+            cat /tmp/summarize-system-prompt.txt
+            echo '```'
+            echo ""
+            echo "</details>"
+            echo ""
+            echo "<details>"
+            echo "<summary>📄 Collected Documentation (click to expand)</summary>"
+            echo ""
+            echo '```text'
+            head -c 10000 /tmp/summarize-user-prompt.txt
+            echo '```'
+            echo ""
+            echo "</details>"
+            echo ""
+          } >> $GITHUB_STEP_SUMMARY
+        shell: bash
+
+      - name: "🧠 AI: Summarize Project Description"
+        id: ai-describe
+        if: steps.resolve-description.outputs.needs-ai == 'true'
+        continue-on-error: true
+        uses: actions/ai-inference@v2
+        with:
+          token: ${{ secrets.RELEASE_AI_TOKEN || github.token }}
+          system-prompt-file: /tmp/summarize-system-prompt.txt
+          prompt-file: /tmp/summarize-user-prompt.txt
+          model: ${{ vars.RELEASE_AI_MODEL || 'openai/gpt-4.1' }}
+          max-completion-tokens: 1024
+          temperature: 0.3
+
+      - name: 💾 Finalize Project Description
+        id: finalize-description
+        env:
+          NEEDS_AI: ${{ steps.resolve-description.outputs.needs-ai }}
+          AI_OUTCOME: ${{ steps.ai-describe.outcome }}
+          AI_RESPONSE_FILE: ${{ steps.ai-describe.outputs.response-file }}
+          TIER12_DESCRIPTION: ${{ steps.resolve-description.outputs.project-description }}
+          TIER12_SOURCE: ${{ steps.resolve-description.outputs.description-source }}
+        run: |
+          # If no AI was needed, pass through Tier 1/2 results
+          if [[ "$NEEDS_AI" != "true" ]]; then
+            # Use delimiter format — value may contain newlines or special characters
+            DELIM="DESC_$(openssl rand -hex 4)"
+            {
+              echo "project-description<<${DELIM}"
+              echo "$TIER12_DESCRIPTION"
+              echo "${DELIM}"
+            } >> "$GITHUB_OUTPUT"
+            echo "description-source=$TIER12_SOURCE" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # AI was needed — check if it succeeded
+          if [[ "$AI_OUTCOME" != "success" || -z "$AI_RESPONSE_FILE" || ! -f "$AI_RESPONSE_FILE" ]]; then
+            echo "::warning::Failed to auto-generate project description. Continuing without."
+            echo "project-description=" >> "$GITHUB_OUTPUT"
+            echo "description-source=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          DESCRIPTION=$(cat "$AI_RESPONSE_FILE")
+
+          if [[ -z "$DESCRIPTION" ]]; then
+            echo "::warning::AI returned empty project description. Continuing without."
+            echo "project-description=" >> "$GITHUB_OUTPUT"
+            echo "description-source=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Flatten to single line for GitHub Output
+          DESCRIPTION_ONELINE=$(echo "$DESCRIPTION" | tr '\n' ' ' | sed 's/  */ /g')
+
+          # Cache for next run
+          mkdir -p /tmp/project-description-cache
+          echo "$DESCRIPTION_ONELINE" > /tmp/project-description-cache/description.txt
+
+          echo "project-description=$DESCRIPTION_ONELINE" >> "$GITHUB_OUTPUT"
+          echo "description-source=ai-generated" >> "$GITHUB_OUTPUT"
+          echo "Auto-generated project description (${#DESCRIPTION_ONELINE} chars)"
+
+          # Write Step Summary — AI-generated project description result
+          {
+            echo "### 🧠 Project Description — AI Output"
+            echo ""
+            echo "| Parameter | Value |"
+            echo "|---|---|"
+            echo "| **Source** | \`AI-generated\` |"
+            echo "| **Length** | \`${#DESCRIPTION_ONELINE} chars\` |"
+            echo ""
+            echo "> $DESCRIPTION_ONELINE"
+            echo ""
+          } >> $GITHUB_STEP_SUMMARY
+        shell: bash
+
+      - name: 📝 Prepare Release Notes Prompts
+        id: prepare-prompts
+        env:
+          AI_MODEL: ${{ vars.RELEASE_AI_MODEL || 'openai/gpt-4.1' }}
+          AI_LANGUAGE: ${{ vars.RELEASE_AI_LANGUAGE || 'en' }}
+          AI_MAX_TOKENS: ${{ vars.RELEASE_AI_MAX_TOKENS || '4096' }}
+          AI_TEMPERATURE: ${{ vars.RELEASE_AI_TEMPERATURE || '0.4' }}
+          AI_CUSTOM_PROMPT: ${{ vars.RELEASE_AI_CUSTOM_PROMPT }}
+          AI_PROJECT_DESCRIPTION: ${{ steps.finalize-description.outputs.project-description }}
+          DESCRIPTION_SOURCE: ${{ steps.finalize-description.outputs.description-source }}
+          VERSION: ${{ needs.calculate-version.outputs.version }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          IS_PRERELEASE: ${{ needs.calculate-version.outputs.is-prerelease }}
+          PRE_RELEASE_TAG: ${{ needs.calculate-version.outputs.pre-release-tag }}
+          LAST_TAG: ${{ steps.collect-changes.outputs.last-tag }}
+        run: |
+          echo "=== Preparing AI Release Notes Prompts ==="
+
+          # Read collected changes from files
+          CHANGES=$(cat /tmp/changes.txt)
+          PR_MERGES=$(cat /tmp/pr_merges.txt)
+          STATS=$(cat /tmp/stats.txt)
+
+          # Build system prompt
+          if [[ -z "$AI_CUSTOM_PROMPT" ]]; then
+            SYSTEM_PROMPT="You are a senior software engineer writing release notes for a developer audience. Your task is to transform raw git commit messages and PR titles into a clear, technically precise, and well-structured release summary.
+
+          Rules:
+          - Write in the language specified by the user (language code provided)
+          - If this is a pre-release, add a prominent notice at the very top:
+            > ⚠️ **Pre-release** — This is a pre-release version. It may contain unstable features and is not recommended for production use.
+          - Start with a concise introductory paragraph (2-3 sentences) highlighting the most important changes and their technical impact
+          - Be technically precise — use correct terminology, name the affected components/modules, and describe what changed at an implementation level
+          - Group changes into logical categories using exactly these headers (omit empty categories):
+            ## ✨ New Features
+            ## 🚀 Improvements
+            ## 🔧 Bug Fixes
+            ## 🔄 Migration Notes
+            ## ⚠️ Breaking Changes
+            ## 📦 Dependencies
+            ## 🔒 Security
+            ## 🏗️ Infrastructure & CI/CD
+            ## 📝 Other Changes
+          - Use markdown formatting with headers and bullet points
+          - Keep each bullet point to 1-2 sentences; include both what changed and why it matters (e.g. 'Replaced N+1 query in OrderRepository with batch loading — reduces order list latency by ~3×')
+          - For dependency updates, mention the old and new version where available
+          - Do NOT include raw commit hashes or internal ticket/issue references
+          - Do NOT invent or fabricate changes that are not present in the provided data
+          - Deduplicate similar commits into a single entry; combine related commits for the same feature or fix
+          - If breaking changes exist, always populate 'Migration Notes' with clear, actionable upgrade steps including code examples where helpful
+          - Adapt output length to the number of changes: brief for few changes, comprehensive for many
+          - If a project description is provided, use it to better contextualize changes
+          - Do NOT include a contributors section — contributors are listed separately by GitHub's auto-generated release notes
+          - Do NOT add a closing summary paragraph or horizontal rule (---) at the end — the output is embedded in a larger document
+          - Do NOT repeat the version number or project name as a heading — this is already shown above your output"
+          else
+            SYSTEM_PROMPT="$AI_CUSTOM_PROMPT"
+          fi
+          echo "$SYSTEM_PROMPT" > /tmp/system-prompt.txt
+
+          # Build user prompt
+          RELEASE_TYPE=$([ "$IS_PRERELEASE" = "true" ] && echo "Pre-release ($PRE_RELEASE_TAG)" || echo "Stable Release")
+          USER_PROMPT="Generate release notes for: ${REPO_NAME} v${VERSION}
+
+          Language: ${AI_LANGUAGE}
+          Previous version: ${LAST_TAG:-'(first release)'}
+          Release type: ${RELEASE_TYPE}
+          Project description: ${AI_PROJECT_DESCRIPTION:-'(not provided)'}
+
+          === Commits ===
+          ${CHANGES}
+
+          === Pull Request Merges ===
+          ${PR_MERGES}
+
+          === Statistics ===
+          ${STATS}"
+
+          echo "$USER_PROMPT" > /tmp/user-prompt.txt
+
+          # Write Step Summary — configuration and prompts for reviewer
+          {
+            echo "## 🤖 AI Release Notes — Model Input & Output"
+            echo ""
+            echo "### ⚙️ Configuration"
+            echo ""
+            echo "| Parameter | Value |"
+            echo "|---|---|"
+            echo "| **Model** | \`$AI_MODEL\` |"
+            echo "| **Language** | \`$AI_LANGUAGE\` |"
+            echo "| **Max Tokens** | \`$AI_MAX_TOKENS\` |"
+            echo "| **Temperature** | \`$AI_TEMPERATURE\` |"
+            echo "| **Version** | \`$VERSION\` |"
+            echo "| **Previous Tag** | \`${LAST_TAG:-'(first release)'}\` |"
+            echo "| **Release Type** | \`$RELEASE_TYPE\` |"
+            echo "| **Project Description** | \`${AI_PROJECT_DESCRIPTION:-'(not provided)'}\` |"
+            echo "| **Description Source** | \`${DESCRIPTION_SOURCE:-'n/a'}\` |"
+            echo "| **Custom Prompt** | \`$([ -n "$AI_CUSTOM_PROMPT" ] && echo 'Yes' || echo 'No (built-in)')\` |"
+            echo ""
+            echo "<details>"
+            echo "<summary>📋 System Prompt (click to expand)</summary>"
+            echo ""
+            echo '```text'
+            cat /tmp/system-prompt.txt
+            echo '```'
+            echo ""
+            echo "</details>"
+            echo ""
+            echo "<details>"
+            echo "<summary>📝 User Prompt (click to expand)</summary>"
+            echo ""
+            echo '```text'
+            cat /tmp/user-prompt.txt
+            echo '```'
+            echo ""
+            echo "</details>"
+            echo ""
+          } >> $GITHUB_STEP_SUMMARY
+
+          echo "Prompts prepared for AI inference"
+        shell: bash
+
+      - name: 🤖 Generate AI Release Notes
+        id: ai-generate
+        uses: actions/ai-inference@v2
+        with:
+          token: ${{ secrets.RELEASE_AI_TOKEN || github.token }}
+          system-prompt-file: /tmp/system-prompt.txt
+          prompt-file: /tmp/user-prompt.txt
+          model: ${{ vars.RELEASE_AI_MODEL || 'openai/gpt-4.1' }}
+          max-completion-tokens: ${{ vars.RELEASE_AI_MAX_TOKENS || '4096' }}
+          temperature: ${{ vars.RELEASE_AI_TEMPERATURE || '0.4' }}
+
+      - name: 📊 Process AI Release Notes
+        id: process-notes
+        env:
+          AI_RESPONSE_FILE: ${{ steps.ai-generate.outputs.response-file }}
+        run: |
+          AI_CONTENT=$(cat "$AI_RESPONSE_FILE")
+
+          if [[ -z "$AI_CONTENT" ]]; then
+            echo "::error::AI response contained no content"
+            echo "ai-generated=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          # Save AI content for artifact upload
+          cp "$AI_RESPONSE_FILE" /tmp/ai-release-notes.md
+
+          # Calculate output statistics
+          AI_CHARS=$(wc -c < /tmp/ai-release-notes.md)
+          AI_WORDS=$(wc -w < /tmp/ai-release-notes.md)
+          AI_LINES=$(wc -l < /tmp/ai-release-notes.md)
+
+          # Write Step Summary output section
+          {
+            echo "---"
+            echo ""
+            echo "### 📄 Generated Release Notes"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|---|---|"
+            echo "| **Characters** | \`${AI_CHARS}\` |"
+            echo "| **Words** | \`${AI_WORDS}\` |"
+            echo "| **Lines** | \`${AI_LINES}\` |"
+            echo ""
+            cat /tmp/ai-release-notes.md
+            echo ""
+            echo "---"
+            echo ""
+            echo "> ⚠️ **Review Required:** Approve this Environment deployment to include the AI-generated text in the release."
+          } >> $GITHUB_STEP_SUMMARY
+
+          # Set output using unique delimiter for multiline content
+          # The extra bare echo before the delimiter ensures it always starts on its own
+          # line even when the AI response file has no trailing newline.
+          DELIMITER="AI_RELEASE_NOTES_$(openssl rand -hex 8)"
+          {
+            echo "ai-body<<${DELIMITER}"
+            cat /tmp/ai-release-notes.md
+            echo ""
+            echo "${DELIMITER}"
+          } >> "$GITHUB_OUTPUT"
+          echo "ai-generated=true" >> "$GITHUB_OUTPUT"
+
+          echo "✅ AI release notes generated successfully"
+        shell: bash
+
+      - name: 📤 Upload AI Release Notes Artifact
+        if: steps.process-notes.outputs.ai-generated == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ai-release-notes
+          path: /tmp/ai-release-notes.md
+          retention-days: 7
+
+  create-release:
+    name: 🏷️ Create GitHub Release
+    needs: [determine-environment, calculate-version, generate-ai-notes]
+    if: |
+      always() &&
+      needs.determine-environment.result == 'success' &&
+      needs.calculate-version.result == 'success' &&
+      (needs.generate-ai-notes.result == 'success' || needs.generate-ai-notes.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.determine-environment.outputs.environment }}
+      url: ${{ vars.RELEASE_GITHUB_ENVIRONMENT_URL || format('{0}/{1}', github.server_url, github.repository) }}
+
+    steps:
+      - name: 📝 Display Release Configuration
+        env:
+          VERSION: ${{ needs.calculate-version.outputs.version }}
+          TAG_NAME: ${{ needs.calculate-version.outputs.tag-name }}
+          RELEASE_NAME: ${{ needs.calculate-version.outputs.release-name }}
+          IS_PRERELEASE: ${{ needs.calculate-version.outputs.is-prerelease }}
+          IS_DRAFT: ${{ vars.RELEASE_GITHUB_DRAFT == 'true' }}
+          GENERATE_NOTES: ${{ vars.RELEASE_GITHUB_GENERATE_NOTES != 'false' }}
+          APPEND_BODY: ${{ vars.RELEASE_GITHUB_APPEND_BODY != 'false' }}
+          ARTIFACT_PATTERN: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATTERN || '*' }}
+          ARTIFACT_PATH: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATH || './release-files' }}
+          FILES_PATTERN: ${{ vars.RELEASE_GITHUB_FILES_PATTERN || '*' }}
+          ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
+        run: |
+          echo "=== GitHub Release Configuration ==="
+          echo ""
+          echo "Version: $VERSION"
+          echo "Tag Name: $TAG_NAME"
+          echo "Release Name: $RELEASE_NAME"
+          echo "Is Pre-release: $IS_PRERELEASE"
+          echo "Is Draft: $IS_DRAFT"
+          echo "Generate Notes: $GENERATE_NOTES"
+          echo "Append Body: $APPEND_BODY"
+          echo "Artifact Pattern: $ARTIFACT_PATTERN"
+          echo "Artifact Path: $ARTIFACT_PATH"
+          echo "Files Pattern: $FILES_PATTERN"
+          echo "Environment: $ENVIRONMENT"
+          echo ""
+
+      - name: ⬇️ Download Release Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATTERN || '*' }}
+          path: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATH || './release-files' }}
+          merge-multiple: true
+
+      - name: 📂 List Downloaded Artifacts
+        env:
+          ARTIFACT_PATH: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATH || './release-files' }}
+        run: |
+          echo "=== Downloaded Artifacts ==="
+          if [ -d "$ARTIFACT_PATH" ]; then
+            find "$ARTIFACT_PATH" -type f -exec ls -la {} \; | head -20
+            echo ""
+            echo "Total files: $(find "$ARTIFACT_PATH" -type f | wc -l)"
+          else
+            echo "No artifacts directory found at: $ARTIFACT_PATH"
+            echo "Available directories:"
+            ls -la .
+          fi
+
+      - name: 🧹 Remove Internal Workflow Artifacts
+        env:
+          ARTIFACT_PATH: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATH || './release-files' }}
+        run: |
+          # Remove AI release notes - used internally by the workflow, not a release asset
+          find "$ARTIFACT_PATH" -name "ai-release-notes.md" -delete 2>/dev/null || true
+          echo "Internal workflow artifacts removed from release files."
+        shell: bash
+
+      - name: 📋 Prepare Release Body
+        id: prepare-body
+        env:
+          AI_BODY: ${{ needs.generate-ai-notes.outputs.ai-body }}
+          AI_GENERATED: ${{ needs.generate-ai-notes.outputs.ai-generated }}
+          CUSTOM_BODY: ${{ vars.RELEASE_GITHUB_CUSTOM_BODY }}
+          APPEND_BODY_SETTING: ${{ vars.RELEASE_GITHUB_APPEND_BODY != 'false' }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          VERSION: ${{ needs.calculate-version.outputs.version }}
+          ASSEMBLY_VERSION: ${{ needs.calculate-version.outputs.assembly-version }}
+          INFORMATIONAL_VERSION: ${{ needs.calculate-version.outputs.informational-version }}
+          IS_PRERELEASE: ${{ needs.calculate-version.outputs.is-prerelease }}
+          PRE_RELEASE_TAG: ${{ needs.calculate-version.outputs.pre-release-tag }}
+          PRE_RELEASE_NUMBER: ${{ needs.calculate-version.outputs.pre-release-number }}
+          COMMITS_SINCE: ${{ needs.calculate-version.outputs.commits-since-version-source }}
+          WEIGHTED_PRE_RELEASE: ${{ needs.calculate-version.outputs.weighted-pre-release-number }}
+          ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
+          REPO_FULL: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          RUN_ID: ${{ github.run_id }}
+          ACTOR: ${{ github.actor }}
+          SERVER_URL: ${{ github.server_url }}
+          COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+        run: |
+          # Determine release type label
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            RELEASE_TYPE="🔥 Pre-release"
+          else
+            RELEASE_TYPE="✅ Stable Release"
+          fi
+
+          # Build header section (title only — shown at the top of every release)
+          {
+            echo "## 📦 ${REPO_NAME} v${VERSION}"
+          } > /tmp/standard-body.md
+
+          # Build footer section (release info, version info, links, build info, support)
+          {
+            echo "### 📋 Release Information"
+            echo "- **Application:** ${REPO_NAME}"
+            echo "- **Version:** \`${VERSION}\`"
+            echo "- **Repository:** [${REPO_FULL}](${SERVER_URL}/${REPO_FULL})"
+            echo "- **Commit:** [\`${COMMIT_SHA}\`](${SERVER_URL}/${REPO_FULL}/commit/${COMMIT_SHA})"
+            echo "- **Release Type:** ${RELEASE_TYPE}"
+            echo "- **Environment:** ${ENVIRONMENT}"
+            echo "- **Created:** ${COMMIT_TIMESTAMP:-now}"
+            echo ""
+            echo "### 📋 Version Information"
+            echo "- **Full Version:** \`${VERSION}\`"
+            echo "- **Assembly Version:** \`${ASSEMBLY_VERSION}\`"
+            echo "- **Informational Version:** \`${INFORMATIONAL_VERSION}\`"
+            echo "- **Pre-release Tag:** \`${PRE_RELEASE_TAG:-None}\`"
+            echo "- **Pre-release Number:** \`${PRE_RELEASE_NUMBER:-0}\`"
+            echo "- **Commits Since Version:** \`${COMMITS_SINCE}\`"
+            echo "- **Weighted Pre-release Number:** \`${WEIGHTED_PRE_RELEASE:-0}\`"
+            echo ""
+            echo "### 🔗 Links"
+            echo "- **Repository:** [${REPO_FULL}](${SERVER_URL}/${REPO_FULL})"
+            echo "- **Issues:** [${REPO_FULL}/issues](${SERVER_URL}/${REPO_FULL}/issues)"
+            echo "- **Discussions:** [${REPO_FULL}/discussions](${SERVER_URL}/${REPO_FULL}/discussions)"
+            echo ""
+            echo "### 🛠️ Build Information"
+            echo "- **Workflow:** [${WORKFLOW_NAME}](${SERVER_URL}/${REPO_FULL}/actions/runs/${RUN_ID})"
+            echo "- **Run ID:** \`${RUN_ID}\`"
+            echo "- **Actor:** @${ACTOR}"
+            echo ""
+            echo "### 🐛 Support & Feedback"
+            echo ""
+            echo "| 📋 Need Help? | 🔗 Resource |"
+            echo "|---------------|-------------|"
+            echo "| **🐛 Report Issues** | [${REPO_FULL}/issues](${SERVER_URL}/${REPO_FULL}/issues) |"
+            echo "| **💬 Discussions** | [${REPO_FULL}/discussions](${SERVER_URL}/${REPO_FULL}/discussions) |"
+            echo "| **📚 Documentation** | [${REPO_FULL}/wiki](${SERVER_URL}/${REPO_FULL}/wiki) |"
+            echo """
+          } > /tmp/footer-body.md
+
+          # Combine: Standard Metadata → AI/Custom Content → Footer
+          if [[ "$AI_GENERATED" == "true" ]]; then
+            echo "Building release body: Standard Metadata + AI Notes + Footer"
+            {
+              cat /tmp/standard-body.md
+              echo ""
+              echo "$AI_BODY"
+              echo ""
+              echo "---"
+              echo ""
+              cat /tmp/footer-body.md
+            } > /tmp/final-body.md
+          elif [[ -n "$CUSTOM_BODY" ]]; then
+            echo "Building release body: Standard Metadata + Custom Body + Footer"
+            {
+              cat /tmp/standard-body.md
+              echo ""
+              echo "$CUSTOM_BODY"
+              echo ""
+              echo "---"
+              echo ""
+              cat /tmp/footer-body.md
+            } > /tmp/final-body.md
+          else
+            echo "Building release body: Standard Metadata + Footer"
+            {
+              cat /tmp/standard-body.md
+              echo ""
+              cat /tmp/footer-body.md
+            } > /tmp/final-body.md
+          fi
+
+          # Write combined body to output
+          DELIMITER="BODY_$(openssl rand -hex 8)"
+          {
+            echo "body<<${DELIMITER}"
+            cat /tmp/final-body.md
+            echo ""
+            echo "${DELIMITER}"
+          } >> "$GITHUB_OUTPUT"
+
+          # AI body always uses append_body=true, others use the variable setting
+          if [[ "$AI_GENERATED" == "true" ]]; then
+            echo "append-body=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "append-body=$APPEND_BODY_SETTING" >> "$GITHUB_OUTPUT"
+          fi
+
+          BODY_CHARS=$(wc -c < /tmp/final-body.md)
+          echo "Release body prepared (${BODY_CHARS} chars)"
+        shell: bash
+
+      - name: 🏷️ Create GitHub Release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
+        with:
+          tag_name: ${{ needs.calculate-version.outputs.tag-name }}
+          name: ${{ needs.calculate-version.outputs.release-name }}
+          files: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATH || './release-files' }}/${{ vars.RELEASE_GITHUB_FILES_PATTERN || '*' }}
+          draft: ${{ vars.RELEASE_GITHUB_DRAFT == 'true' }}
+          prerelease: ${{ needs.calculate-version.outputs.is-prerelease == 'true' }}
+          generate_release_notes: ${{ vars.RELEASE_GITHUB_GENERATE_NOTES != 'false' }}
+          append_body: ${{ steps.prepare-body.outputs.append-body }}
+          target_commitish: ${{ github.sha }}
+          discussion_category_name: ${{ vars.RELEASE_GITHUB_DISCUSSION_ENABLED != 'false' && (vars.RELEASE_GITHUB_DISCUSSION_CATEGORY || 'announcements') || '' }}
+          body: ${{ steps.prepare-body.outputs.body }}
+
+      - name: ✅ Release Created Successfully
+        env:
+          TAG_NAME: ${{ needs.calculate-version.outputs.tag-name }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.calculate-version.outputs.tag-name }}
+        run: |
+          echo "🎉 GitHub Release created successfully!"
+          echo "📍 Release URL: $RELEASE_URL"
+          echo "🏷️ Tag: $TAG_NAME"
+          echo "📦 Version: ${{ needs.calculate-version.outputs.version }}"
+          echo "ℹ️ Release Type: ${{ needs.calculate-version.outputs.is-prerelease == 'true' && '🔥 Pre-release' || '✅ Stable Release' }}"
+          echo "🔖 Pre-release Tag: ${{ needs.calculate-version.outputs.pre-release-tag || 'None' }}"
+          echo "🔢 Pre-release Number: ${{ needs.calculate-version.outputs.pre-release-number || '0' }}"
+          echo "⚖️ Weighted Pre-release Number: ${{ needs.calculate-version.outputs.weighted-pre-release-number || '0' }}"
+          echo ""
+          echo "### 🎉 GitHub Release Created" >> $GITHUB_STEP_SUMMARY
+          echo "- **🏷️ Tag:** \`$TAG_NAME\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **📦 Version:** \`${{ needs.calculate-version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **🔖 Pre-release Tag:** \`${{ needs.calculate-version.outputs.pre-release-tag || 'None' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **🔢 Pre-release Number:** \`${{ needs.calculate-version.outputs.pre-release-number || '0' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **⚖️ Weighted Pre-release Number:** \`${{ needs.calculate-version.outputs.weighted-pre-release-number || '0' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **📍 URL:** [$RELEASE_URL]($RELEASE_URL)" >> $GITHUB_STEP_SUMMARY
+          echo "- **ℹ️ Release Type:** ${{ needs.calculate-version.outputs.is-prerelease == 'true' && '🔥 Pre-release' || '✅ Stable Release' }}" >> $GITHUB_STEP_SUMMARY
