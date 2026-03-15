@@ -18,21 +18,29 @@ Everything is written to be configured through GitHub variables and secrets,
 with explicit reusable workflow inputs available for cross-organization callers,
 so the calling workflows can stay pleasantly boring.
 
+## ✨ At a glance
+
+- 🏷️ reusable GitVersion badge publishing
+- 🚀 release automation with artifact support
+- 🤖 optional AI-assisted release notes with review gates
+- 🔐 explicit secret and variable mapping for cross-org callers
+- 🧩 examples that are meant to be copied, not admired from afar
+
 ## 📖 Table of Contents
 
-- [Requirements](#️-requirements)
-- [Overview](#-overview)
-- [Features](#-features)
-- [Repository Structure](#️-repository-structure)
-- [Available Workflows](#-available-workflows)
-- [GitHub Variables](#-github-variables)
-- [Secrets](#-secrets)
-- [Examples](#-examples)
-- [GitVersion Setup](#️-gitversion-setup)
-- [Versioning](#-versioning)
-- [Contributing](#-contributing)
-- [Security](#-security)
-- [Support](#-support)
+- [⚠️ Requirements](#️-requirements)
+- [📜 Overview](#-overview)
+- [✨ Features](#-features)
+- [🏗️ Repository Structure](#️-repository-structure)
+- [🚀 Available Workflows](#-available-workflows)
+- [🔧 GitHub Variables](#-github-variables)
+- [🔐 Secrets](#-secrets)
+- [🧪 Examples](#-examples)
+- [🏷️ GitVersion Setup](#️-gitversion-setup)
+- [🌿 Versioning](#-versioning)
+- [🤝 Contributing](#-contributing)
+- [🔒 Security](#-security)
+- [📞 Support](#-support)
 
 ## ⚠️ Requirements
 
@@ -60,6 +68,7 @@ This repository currently includes:
 > cross-organization callers should pass `with:` inputs and `secrets:`
 > explicitly. Reusable workflows cannot reliably read the caller's `vars`
 > across organizations unless the caller forwards them.
+
 > [!WARNING]
 > If `GitVersion.yml` is missing or invalid, the workflows that depend on
 > GitVersion will fail.
