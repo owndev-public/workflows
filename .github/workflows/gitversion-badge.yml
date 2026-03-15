@@ -63,12 +63,40 @@ on:
   push:
     branches: ["main", "master", "dev", "develop"]
   workflow_call:
+    inputs:
+      badge_repo:
+        description: Badge repository in owner/repo format. Recommended for cross-organization callers.
+        required: false
+        type: string
+      badge_label:
+        description: Override badge label text.
+        required: false
+        type: string
+      badge_color:
+        description: Override badge color hex code.
+        required: false
+        type: string
+      badge_style:
+        description: "Badge style. Supported values: classic, flat."
+        required: false
+        type: string
+      gitversion_version_spec:
+        description: GitVersion setup version specification.
+        required: false
+        type: string
+    secrets:
+      badge_repo_token:
+        description: Token with push access to the configured badge repository.
+        required: false
   workflow_dispatch:
 
 jobs:
   gitversion-badge:
     name: 🏷️ Create GitVersion Badge
     runs-on: ubuntu-latest
+    env:
+      BADGE_REPO: ${{ inputs.badge_repo || vars.GITVERSION_BADGE_REPO }}
+      GITVERSION_VERSION_SPEC: ${{ inputs.gitversion_version_spec || vars.GITVERSION_VERSION_SPEC || '6.4.x' }}
 
     steps:
       # ✅ Repository Checkout
@@ -81,8 +109,24 @@ jobs:
       - name: Install GitVersion
         uses: gittools/actions/gitversion/setup@1926e472ec11678401f0ad64d1dd112d2b5a987f
         with:
-          versionSpec: ${{ vars.GITVERSION_VERSION_SPEC }}
+          versionSpec: ${{ env.GITVERSION_VERSION_SPEC }}
           preferLatestVersion: true
+
+      - name: 🔐 Validate Badge Repository Configuration
+        env:
+          BADGE_REPO_TOKEN: ${{ secrets.badge_repo_token || secrets.GITVERSION_BADGE_REPO_TOKEN }}
+        run: |
+          if [[ -z "$BADGE_REPO" ]]; then
+            echo "::error::Badge repository is not configured. Set the GITVERSION_BADGE_REPO variable or pass with.badge_repo when calling the reusable workflow."
+            exit 1
+          fi
+
+          if [[ -z "$BADGE_REPO_TOKEN" ]]; then
+            echo "::error::Badge repository token is not available. Pass secrets.badge_repo_token explicitly for cross-organization calls or provide GITVERSION_BADGE_REPO_TOKEN when secrets inheritance is available."
+            exit 1
+          fi
+
+          echo "Badge repository configuration validated for $BADGE_REPO"
 
       # ✅ GitVersion Calculate
       - name: 🔍 Determine version
@@ -93,6 +137,9 @@ jobs:
       - name: 🎨 Determine GitFlow Badge Configuration
         id: badge-config
         run: |
+          label_override="${{ inputs.badge_label }}"
+          color_override="${{ inputs.badge_color }}"
+
           # Get branch name - use GitVersion branchName for tags, github.ref_name for branches
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             branch_name="${{ steps.gitversion.outputs.branchName }}"
@@ -104,40 +151,37 @@ jobs:
 
           echo "Processing branch: $branch_name"
 
-          # Default color from variables or GitFlow-based
-          default_color="${{ vars.GITVERSION_BADGE_COLOR }}"
-
           # Determine badge filename and label based on branch type
           case "$branch_name" in
             main|master)
               badge_filename="main"
-              badge_label="${{ vars.GITVERSION_BADGE_LABEL || 'main' }}"
-              color="${default_color:-22C55E}"  # green - production releases
+              badge_label="${label_override:-main}"
+              color="${color_override:-22C55E}"  # green - production releases
               ;;
             dev|develop)
               badge_filename="dev"
-              badge_label="${{ vars.GITVERSION_BADGE_LABEL || 'dev' }}"
-              color="${default_color:-3B82F6}"  # blue - development releases
+              badge_label="${label_override:-dev}"
+              color="${color_override:-3B82F6}"  # blue - development releases
               ;;
             release/*)
               badge_filename="release"
-              badge_label="${{ vars.GITVERSION_BADGE_LABEL || 'release' }}"
-              color="${default_color:-F59E0B}"  # amber - release candidates
+              badge_label="${label_override:-release}"
+              color="${color_override:-F59E0B}"  # amber - release candidates
               ;;
             hotfix/*)
               badge_filename="hotfix"
-              badge_label="${{ vars.GITVERSION_BADGE_LABEL || 'hotfix' }}"
-              color="${default_color:-EF4444}"  # red - hotfix releases
+              badge_label="${label_override:-hotfix}"
+              color="${color_override:-EF4444}"  # red - hotfix releases
               ;;
             feature/*)
               badge_filename="feature"
-              badge_label="${{ vars.GITVERSION_BADGE_LABEL || 'feature' }}"
-              color="${default_color:-8B5CF6}"  # violet - feature branches
+              badge_label="${label_override:-feature}"
+              color="${color_override:-8B5CF6}"  # violet - feature branches
               ;;
             *)
               badge_filename="$branch_name"
-              badge_label="${{ vars.GITVERSION_BADGE_LABEL || '$branch_name' }}"
-              color="${default_color:-64748B}"  # slate - other branches
+              badge_label="${label_override:-$branch_name}"
+              color="${color_override:-64748B}"  # slate - other branches
               ;;
           esac
 
@@ -163,15 +207,15 @@ jobs:
           label-color: 555
           status: "v${{ steps.gitversion.outputs.SemVer }}"
           color: ${{ steps.badge-config.outputs.color }}
-          style: ${{ vars.GITVERSION_BADGE_STYLE || 'classic' }}
+          style: ${{ inputs.badge_style || 'classic' }}
           path: version-badge.svg
 
       # ✅ Checkout Central Badge Repository
       - name: 📂 Checkout Badge Repository
         uses: actions/checkout@v6
         with:
-          repository: ${{ vars.GITVERSION_BADGE_REPO }}
-          token: ${{ secrets.GITVERSION_BADGE_REPO_TOKEN }}
+          repository: ${{ env.BADGE_REPO }}
+          token: ${{ secrets.badge_repo_token || secrets.GITVERSION_BADGE_REPO_TOKEN }}
           ref: main
           path: badge-repo
 
@@ -225,8 +269,8 @@ jobs:
       # ✅ Badge Summary Output
       - name: 📋 Generate Badge Summary
         env:
-          GITVERSION_BADGE_REPO: ${{ vars.GITVERSION_BADGE_REPO }}
-          GITVERSION_BADGE_STYLE: ${{ vars.GITVERSION_BADGE_STYLE || 'classic' }}
+          GITVERSION_BADGE_REPO: ${{ env.BADGE_REPO }}
+          GITVERSION_BADGE_STYLE: ${{ inputs.badge_style || 'classic' }}
         run: |
           # Extract badge repository info for URL generation
           badge_repo="$GITVERSION_BADGE_REPO"

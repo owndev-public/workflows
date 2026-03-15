@@ -54,4 +54,11 @@ jobs:
   gitversion-badge:
     name: 🏷️ Create GitVersion Badge
     uses: owndev-public/workflows/.github/workflows/gitversion-badge.yml@main
-    secrets: inherit # Inherit secrets from the repository
+    with:
+      badge_repo: ${{ vars.GITVERSION_BADGE_REPO }}
+      badge_label: ${{ vars.GITVERSION_BADGE_LABEL }}
+      badge_color: ${{ vars.GITVERSION_BADGE_COLOR }}
+      badge_style: ${{ vars.GITVERSION_BADGE_STYLE }}
+      gitversion_version_spec: ${{ vars.GITVERSION_VERSION_SPEC }}
+    secrets:
+      badge_repo_token: ${{ secrets.GITVERSION_BADGE_REPO_TOKEN }}

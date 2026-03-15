@@ -15,6 +15,7 @@ This repository is focused on two things:
 - creating GitHub releases with optional AI-generated release notes
 
 Everything is written to be configured through GitHub variables and secrets,
+with explicit reusable workflow inputs available for cross-organization callers,
 so the calling workflows can stay pleasantly boring.
 
 ## 📖 Table of Contents
@@ -55,9 +56,10 @@ This repository currently includes:
 2. **GitHub Release Workflow** for publishing releases with GitVersion metadata
 
 > [!IMPORTANT]
-> If the called workflow needs access to repository or organization secrets,
-> the calling workflow must use `secrets: inherit`.
-
+> Same-organization callers can often use `secrets: inherit`, but
+> cross-organization callers should pass `with:` inputs and `secrets:`
+> explicitly. Reusable workflows cannot reliably read the caller's `vars`
+> across organizations unless the caller forwards them.
 > [!WARNING]
 > If `GitVersion.yml` is missing or invalid, the workflows that depend on
 > GitVersion will fail.
@@ -68,7 +70,7 @@ This repository currently includes:
 - Automatic SVG badge generation per GitFlow-style branch type
 - Release creation with optional artifact uploads
 - Optional AI-generated release notes through GitHub Models
-- GitHub Variables-based configuration
+- GitHub Variables-based configuration with explicit cross-org input support
 - Environment-aware release behavior
 - Reusable workflows that keep caller workflows short and maintainable
 
@@ -132,6 +134,11 @@ Highlights:
 
 ## 🔧 GitHub Variables
 
+> [!NOTE]
+> For callers in a different organization or owner account, map variables to the
+> reusable workflow `with:` inputs shown in the examples. The reusable workflow
+> will use those inputs first and fall back to local `vars` when available.
+
 ### GitVersion Badge Variables
 
 | Variable | Type | Default | Description |
@@ -147,6 +154,16 @@ Recommended example:
 ```text
 GITVERSION_BADGE_REPO=owndev-public/badges
 ```
+
+Reusable workflow inputs for cross-org callers:
+
+| Input | Maps to variable |
+| --- | --- |
+| `badge_repo` | `GITVERSION_BADGE_REPO` |
+| `badge_label` | `GITVERSION_BADGE_LABEL` |
+| `badge_color` | `GITVERSION_BADGE_COLOR` |
+| `badge_style` | `GITVERSION_BADGE_STYLE` |
+| `gitversion_version_spec` | `GITVERSION_VERSION_SPEC` |
 
 ### GitHub Release Variables
 
@@ -185,11 +202,40 @@ GITVERSION_BADGE_REPO=owndev-public/badges
 | `RELEASE_AI_MAX_COMMITS` | string | `500` | Maximum commits analyzed by the AI step |
 | `RELEASE_AI_REVIEW_ENVIRONMENT` | string | auto-generated | Environment name used for review approval |
 
+Reusable workflow inputs for cross-org callers:
+
+| Input | Maps to variable |
+| --- | --- |
+| `release_github_use_gitversion` | `RELEASE_GITHUB_USE_GITVERSION` |
+| `gitversion_version_spec` | `GITVERSION_VERSION_SPEC` |
+| `release_github_tag_name` | `RELEASE_GITHUB_TAG_NAME` |
+| `release_github_name` | `RELEASE_GITHUB_NAME` |
+| `release_github_draft` | `RELEASE_GITHUB_DRAFT` |
+| `release_github_generate_notes` | `RELEASE_GITHUB_GENERATE_NOTES` |
+| `release_github_append_body` | `RELEASE_GITHUB_APPEND_BODY` |
+| `release_github_artifact_pattern` | `RELEASE_GITHUB_ARTIFACT_PATTERN` |
+| `release_github_artifact_path` | `RELEASE_GITHUB_ARTIFACT_PATH` |
+| `release_github_files_pattern` | `RELEASE_GITHUB_FILES_PATTERN` |
+| `release_github_environment_url` | `RELEASE_GITHUB_ENVIRONMENT_URL` |
+| `release_github_custom_body` | `RELEASE_GITHUB_CUSTOM_BODY` |
+| `release_github_discussion_enabled` | `RELEASE_GITHUB_DISCUSSION_ENABLED` |
+| `release_github_discussion_category` | `RELEASE_GITHUB_DISCUSSION_CATEGORY` |
+| `release_ai_enabled` | `RELEASE_AI_ENABLED` |
+| `release_ai_model` | `RELEASE_AI_MODEL` |
+| `release_ai_language` | `RELEASE_AI_LANGUAGE` |
+| `release_ai_max_tokens` | `RELEASE_AI_MAX_TOKENS` |
+| `release_ai_temperature` | `RELEASE_AI_TEMPERATURE` |
+| `release_ai_custom_prompt` | `RELEASE_AI_CUSTOM_PROMPT` |
+| `release_ai_project_description` | `RELEASE_AI_PROJECT_DESCRIPTION` |
+| `release_ai_max_commits` | `RELEASE_AI_MAX_COMMITS` |
+| `release_ai_review_environment` | `RELEASE_AI_REVIEW_ENVIRONMENT` |
+
 ## 🔐 Secrets
 
 > [!IMPORTANT]
 > Reusable workflows do not automatically receive secrets. Use
-> `secrets: inherit` in the calling workflow.
+> `secrets: inherit` only when GitHub allows it for your caller relationship.
+> For cross-organization calls, pass secrets explicitly.
 
 | Secret | Required | Used by | Description |
 | --- | --- | --- | --- |
@@ -197,12 +243,22 @@ GITVERSION_BADGE_REPO=owndev-public/badges
 | `GITVERSION_BADGE_REPO_TOKEN` | optional | GitVersion Badge | Token with push access to the badge repository |
 | `RELEASE_AI_TOKEN` | optional | GitHub Release | Personal token with `models:read` for GitHub Models |
 
+Reusable workflow secret mappings for cross-org callers:
+
+| Secret mapping | Maps to secret |
+| --- | --- |
+| `badge_repo_token` | `GITVERSION_BADGE_REPO_TOKEN` |
+| `release_ai_token` | `RELEASE_AI_TOKEN` |
+
 ## 🧪 Examples
 
 Example caller workflows are available in [`examples/`](examples/):
 
 - [`examples/gitversion-badge.yml`](examples/gitversion-badge.yml)
 - [`examples/github-release.yml`](examples/github-release.yml)
+
+The examples use explicit `with:` and `secrets:` mappings so they work for
+cross-organization consumers as well as same-organization callers.
 
 ## 🏷️ GitVersion Setup
 

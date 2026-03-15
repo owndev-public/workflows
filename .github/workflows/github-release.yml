@@ -190,6 +190,103 @@ permissions:
 
 on:
   workflow_call:
+    inputs:
+      release_github_use_gitversion:
+        description: Enable GitVersion-based version calculation.
+        required: false
+        type: string
+      gitversion_version_spec:
+        description: GitVersion setup version specification.
+        required: false
+        type: string
+      release_github_tag_name:
+        description: Release tag name pattern, supports {version}.
+        required: false
+        type: string
+      release_github_name:
+        description: Release title pattern, supports {version}.
+        required: false
+        type: string
+      release_github_draft:
+        description: Create the release as a draft.
+        required: false
+        type: string
+      release_github_generate_notes:
+        description: Enable GitHub generated release notes.
+        required: false
+        type: string
+      release_github_append_body:
+        description: Append custom body content to generated notes.
+        required: false
+        type: string
+      release_github_artifact_pattern:
+        description: Artifact download pattern.
+        required: false
+        type: string
+      release_github_artifact_path:
+        description: Local path for downloaded artifacts.
+        required: false
+        type: string
+      release_github_files_pattern:
+        description: Files pattern uploaded to the release.
+        required: false
+        type: string
+      release_github_environment_url:
+        description: Optional deployment or environment URL.
+        required: false
+        type: string
+      release_github_custom_body:
+        description: Custom markdown body appended or used for the release.
+        required: false
+        type: string
+      release_github_discussion_enabled:
+        description: Enable release discussion creation.
+        required: false
+        type: string
+      release_github_discussion_category:
+        description: Discussion category name.
+        required: false
+        type: string
+      release_ai_enabled:
+        description: Enable AI-generated release notes.
+        required: false
+        type: string
+      release_ai_model:
+        description: GitHub Models model ID.
+        required: false
+        type: string
+      release_ai_language:
+        description: Output language for AI release notes.
+        required: false
+        type: string
+      release_ai_max_tokens:
+        description: Maximum completion tokens for AI release notes.
+        required: false
+        type: string
+      release_ai_temperature:
+        description: AI temperature value.
+        required: false
+        type: string
+      release_ai_custom_prompt:
+        description: Custom AI system prompt.
+        required: false
+        type: string
+      release_ai_project_description:
+        description: Explicit project description used as AI context.
+        required: false
+        type: string
+      release_ai_max_commits:
+        description: Maximum commits analyzed by AI.
+        required: false
+        type: string
+      release_ai_review_environment:
+        description: Review environment name for AI approval.
+        required: false
+        type: string
+    secrets:
+      release_ai_token:
+        description: Personal token with models:read for GitHub Models.
+        required: false
   workflow_dispatch:
 
 jobs:
@@ -228,6 +325,11 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ needs.determine-environment.outputs.environment }}
+    env:
+      RELEASE_GITHUB_USE_GITVERSION: ${{ inputs.release_github_use_gitversion || vars.RELEASE_GITHUB_USE_GITVERSION || 'true' }}
+      GITVERSION_VERSION_SPEC: ${{ inputs.gitversion_version_spec || vars.GITVERSION_VERSION_SPEC || '6.4.x' }}
+      RELEASE_GITHUB_TAG_NAME: ${{ inputs.release_github_tag_name || vars.RELEASE_GITHUB_TAG_NAME }}
+      RELEASE_GITHUB_NAME: ${{ inputs.release_github_name || vars.RELEASE_GITHUB_NAME }}
     outputs:
       version: ${{ steps.gitversion.outputs.SemVer }}
       assembly-version: ${{ steps.gitversion.outputs.AssemblySemVer }}
@@ -247,19 +349,19 @@ jobs:
           fetch-depth: 0
 
       - name: 🛠️ Install GitVersion
-        if: vars.RELEASE_GITHUB_USE_GITVERSION != 'false'
+        if: env.RELEASE_GITHUB_USE_GITVERSION != 'false'
         uses: gittools/actions/gitversion/setup@1926e472ec11678401f0ad64d1dd112d2b5a987f
         with:
-          versionSpec: ${{ vars.GITVERSION_VERSION_SPEC }}
+          versionSpec: ${{ env.GITVERSION_VERSION_SPEC }}
           preferLatestVersion: true
 
       - name: 🔢 Determine version
-        if: vars.RELEASE_GITHUB_USE_GITVERSION != 'false'
+        if: env.RELEASE_GITHUB_USE_GITVERSION != 'false'
         id: gitversion
         uses: gittools/actions/gitversion/execute@1926e472ec11678401f0ad64d1dd112d2b5a987f
 
       - name: 🔢 Fallback version calculation
-        if: vars.RELEASE_GITHUB_USE_GITVERSION == 'false'
+        if: env.RELEASE_GITHUB_USE_GITVERSION == 'false'
         id: fallback-version
         run: |
           # Use tag name or generate version from date and commit
@@ -281,8 +383,8 @@ jobs:
         id: tag
         env:
           VERSION: ${{ steps.gitversion.outputs.SemVer || steps.fallback-version.outputs.SemVer }}
-          CUSTOM_TAG_NAME: ${{ vars.RELEASE_GITHUB_TAG_NAME }}
-          CUSTOM_RELEASE_NAME: ${{ vars.RELEASE_GITHUB_NAME }}
+          CUSTOM_TAG_NAME: ${{ env.RELEASE_GITHUB_TAG_NAME }}
+          CUSTOM_RELEASE_NAME: ${{ env.RELEASE_GITHUB_NAME }}
         run: |
           # Calculate tag name
           if [[ -n "$CUSTOM_TAG_NAME" ]]; then
@@ -312,11 +414,21 @@ jobs:
   # and the generated output in the Step Summary before approving.
   generate-ai-notes:
     name: 🤖 Generate AI Release Notes
-    if: vars.RELEASE_AI_ENABLED == 'true'
+    if: ${{ (inputs.release_ai_enabled || vars.RELEASE_AI_ENABLED || 'false') == 'true' }}
     needs: [determine-environment, calculate-version]
     runs-on: ubuntu-latest
     environment:
-      name: ${{ vars.RELEASE_AI_REVIEW_ENVIRONMENT || needs.determine-environment.outputs.environment }}
+      name: ${{ inputs.release_ai_review_environment || vars.RELEASE_AI_REVIEW_ENVIRONMENT || needs.determine-environment.outputs.environment }}
+    env:
+      RELEASE_AI_ENABLED: ${{ inputs.release_ai_enabled || vars.RELEASE_AI_ENABLED || 'false' }}
+      RELEASE_AI_MODEL: ${{ inputs.release_ai_model || vars.RELEASE_AI_MODEL || 'openai/gpt-4.1' }}
+      RELEASE_AI_LANGUAGE: ${{ inputs.release_ai_language || vars.RELEASE_AI_LANGUAGE || 'en' }}
+      RELEASE_AI_MAX_TOKENS: ${{ inputs.release_ai_max_tokens || vars.RELEASE_AI_MAX_TOKENS || '4096' }}
+      RELEASE_AI_TEMPERATURE: ${{ inputs.release_ai_temperature || vars.RELEASE_AI_TEMPERATURE || '0.4' }}
+      RELEASE_AI_CUSTOM_PROMPT: ${{ inputs.release_ai_custom_prompt || vars.RELEASE_AI_CUSTOM_PROMPT }}
+      RELEASE_AI_PROJECT_DESCRIPTION: ${{ inputs.release_ai_project_description || vars.RELEASE_AI_PROJECT_DESCRIPTION }}
+      RELEASE_AI_MAX_COMMITS: ${{ inputs.release_ai_max_commits || vars.RELEASE_AI_MAX_COMMITS || '500' }}
+      RELEASE_AI_REVIEW_ENVIRONMENT: ${{ inputs.release_ai_review_environment || vars.RELEASE_AI_REVIEW_ENVIRONMENT }}
     outputs:
       ai-body: ${{ steps.process-notes.outputs.ai-body }}
       ai-generated: ${{ steps.process-notes.outputs.ai-generated }}
@@ -330,7 +442,7 @@ jobs:
       - name: 📋 Collect Changes Since Last Release
         id: collect-changes
         env:
-          MAX_COMMITS: ${{ vars.RELEASE_AI_MAX_COMMITS || '500' }}
+          MAX_COMMITS: ${{ env.RELEASE_AI_MAX_COMMITS }}
           CURRENT_TAG: ${{ needs.calculate-version.outputs.tag-name }}
         run: |
           echo "=== Collecting changes since last release ==="
@@ -438,7 +550,7 @@ jobs:
 
       - name: 💾 Restore Project Description Cache
         id: description-cache
-        if: vars.RELEASE_AI_PROJECT_DESCRIPTION == ''
+        if: env.RELEASE_AI_PROJECT_DESCRIPTION == ''
         uses: actions/cache@v5
         with:
           path: /tmp/project-description-cache
@@ -447,7 +559,7 @@ jobs:
       - name: 🔍 Resolve Project Description
         id: resolve-description
         env:
-          EXPLICIT_DESCRIPTION: ${{ vars.RELEASE_AI_PROJECT_DESCRIPTION }}
+          EXPLICIT_DESCRIPTION: ${{ env.RELEASE_AI_PROJECT_DESCRIPTION }}
           CACHE_HIT: ${{ steps.description-cache.outputs.cache-hit }}
         run: |
           # Tier 1: Explicit variable
@@ -568,7 +680,7 @@ jobs:
             echo "|---|---|"
             echo "| **Description Source** | \`Tier 3: AI-generated from docs\` |"
             echo "| **Documentation Size** | \`${DOC_CHAR_COUNT} chars\` |"
-            echo "| **Model** | \`${{ vars.RELEASE_AI_MODEL || 'openai/gpt-4.1' }}\` |"
+            echo "| **Model** | \`${{ env.RELEASE_AI_MODEL }}\` |"
             echo "| **Max Tokens** | \`1024\` |"
             echo "| **Temperature** | \`0.3\` |"
             echo ""
@@ -599,10 +711,10 @@ jobs:
         continue-on-error: true
         uses: actions/ai-inference@v2
         with:
-          token: ${{ secrets.RELEASE_AI_TOKEN || github.token }}
+          token: ${{ secrets.release_ai_token || secrets.RELEASE_AI_TOKEN || github.token }}
           system-prompt-file: /tmp/summarize-system-prompt.txt
           prompt-file: /tmp/summarize-user-prompt.txt
-          model: ${{ vars.RELEASE_AI_MODEL || 'openai/gpt-4.1' }}
+          model: ${{ env.RELEASE_AI_MODEL }}
           max-completion-tokens: 1024
           temperature: 0.3
 
@@ -673,11 +785,11 @@ jobs:
       - name: 📝 Prepare Release Notes Prompts
         id: prepare-prompts
         env:
-          AI_MODEL: ${{ vars.RELEASE_AI_MODEL || 'openai/gpt-4.1' }}
-          AI_LANGUAGE: ${{ vars.RELEASE_AI_LANGUAGE || 'en' }}
-          AI_MAX_TOKENS: ${{ vars.RELEASE_AI_MAX_TOKENS || '4096' }}
-          AI_TEMPERATURE: ${{ vars.RELEASE_AI_TEMPERATURE || '0.4' }}
-          AI_CUSTOM_PROMPT: ${{ vars.RELEASE_AI_CUSTOM_PROMPT }}
+          AI_MODEL: ${{ env.RELEASE_AI_MODEL }}
+          AI_LANGUAGE: ${{ env.RELEASE_AI_LANGUAGE }}
+          AI_MAX_TOKENS: ${{ env.RELEASE_AI_MAX_TOKENS }}
+          AI_TEMPERATURE: ${{ env.RELEASE_AI_TEMPERATURE }}
+          AI_CUSTOM_PROMPT: ${{ env.RELEASE_AI_CUSTOM_PROMPT }}
           AI_PROJECT_DESCRIPTION: ${{ steps.finalize-description.outputs.project-description }}
           DESCRIPTION_SOURCE: ${{ steps.finalize-description.outputs.description-source }}
           VERSION: ${{ needs.calculate-version.outputs.version }}
@@ -796,12 +908,12 @@ jobs:
         id: ai-generate
         uses: actions/ai-inference@v2
         with:
-          token: ${{ secrets.RELEASE_AI_TOKEN || github.token }}
+          token: ${{ secrets.release_ai_token || secrets.RELEASE_AI_TOKEN || github.token }}
           system-prompt-file: /tmp/system-prompt.txt
           prompt-file: /tmp/user-prompt.txt
-          model: ${{ vars.RELEASE_AI_MODEL || 'openai/gpt-4.1' }}
-          max-completion-tokens: ${{ vars.RELEASE_AI_MAX_TOKENS || '4096' }}
-          temperature: ${{ vars.RELEASE_AI_TEMPERATURE || '0.4' }}
+          model: ${{ env.RELEASE_AI_MODEL }}
+          max-completion-tokens: ${{ env.RELEASE_AI_MAX_TOKENS }}
+          temperature: ${{ env.RELEASE_AI_TEMPERATURE }}
 
       - name: 📊 Process AI Release Notes
         id: process-notes
@@ -877,7 +989,18 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ needs.determine-environment.outputs.environment }}
-      url: ${{ vars.RELEASE_GITHUB_ENVIRONMENT_URL || format('{0}/{1}', github.server_url, github.repository) }}
+      url: ${{ inputs.release_github_environment_url || vars.RELEASE_GITHUB_ENVIRONMENT_URL || format('{0}/{1}', github.server_url, github.repository) }}
+    env:
+      RELEASE_GITHUB_DRAFT: ${{ inputs.release_github_draft || vars.RELEASE_GITHUB_DRAFT || 'false' }}
+      RELEASE_GITHUB_GENERATE_NOTES: ${{ inputs.release_github_generate_notes || vars.RELEASE_GITHUB_GENERATE_NOTES || 'true' }}
+      RELEASE_GITHUB_APPEND_BODY: ${{ inputs.release_github_append_body || vars.RELEASE_GITHUB_APPEND_BODY || 'true' }}
+      RELEASE_GITHUB_ARTIFACT_PATTERN: ${{ inputs.release_github_artifact_pattern || vars.RELEASE_GITHUB_ARTIFACT_PATTERN || '*' }}
+      RELEASE_GITHUB_ARTIFACT_PATH: ${{ inputs.release_github_artifact_path || vars.RELEASE_GITHUB_ARTIFACT_PATH || './release-files' }}
+      RELEASE_GITHUB_FILES_PATTERN: ${{ inputs.release_github_files_pattern || vars.RELEASE_GITHUB_FILES_PATTERN || '*' }}
+      RELEASE_GITHUB_ENVIRONMENT_URL: ${{ inputs.release_github_environment_url || vars.RELEASE_GITHUB_ENVIRONMENT_URL }}
+      RELEASE_GITHUB_CUSTOM_BODY: ${{ inputs.release_github_custom_body || vars.RELEASE_GITHUB_CUSTOM_BODY }}
+      RELEASE_GITHUB_DISCUSSION_ENABLED: ${{ inputs.release_github_discussion_enabled || vars.RELEASE_GITHUB_DISCUSSION_ENABLED || 'true' }}
+      RELEASE_GITHUB_DISCUSSION_CATEGORY: ${{ inputs.release_github_discussion_category || vars.RELEASE_GITHUB_DISCUSSION_CATEGORY || 'announcements' }}
 
     steps:
       - name: 📝 Display Release Configuration
@@ -886,12 +1009,12 @@ jobs:
           TAG_NAME: ${{ needs.calculate-version.outputs.tag-name }}
           RELEASE_NAME: ${{ needs.calculate-version.outputs.release-name }}
           IS_PRERELEASE: ${{ needs.calculate-version.outputs.is-prerelease }}
-          IS_DRAFT: ${{ vars.RELEASE_GITHUB_DRAFT == 'true' }}
-          GENERATE_NOTES: ${{ vars.RELEASE_GITHUB_GENERATE_NOTES != 'false' }}
-          APPEND_BODY: ${{ vars.RELEASE_GITHUB_APPEND_BODY != 'false' }}
-          ARTIFACT_PATTERN: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATTERN || '*' }}
-          ARTIFACT_PATH: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATH || './release-files' }}
-          FILES_PATTERN: ${{ vars.RELEASE_GITHUB_FILES_PATTERN || '*' }}
+          IS_DRAFT: ${{ env.RELEASE_GITHUB_DRAFT == 'true' }}
+          GENERATE_NOTES: ${{ env.RELEASE_GITHUB_GENERATE_NOTES != 'false' }}
+          APPEND_BODY: ${{ env.RELEASE_GITHUB_APPEND_BODY != 'false' }}
+          ARTIFACT_PATTERN: ${{ env.RELEASE_GITHUB_ARTIFACT_PATTERN }}
+          ARTIFACT_PATH: ${{ env.RELEASE_GITHUB_ARTIFACT_PATH }}
+          FILES_PATTERN: ${{ env.RELEASE_GITHUB_FILES_PATTERN }}
           ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
         run: |
           echo "=== GitHub Release Configuration ==="
@@ -912,13 +1035,13 @@ jobs:
       - name: ⬇️ Download Release Artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATTERN || '*' }}
-          path: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATH || './release-files' }}
+          pattern: ${{ env.RELEASE_GITHUB_ARTIFACT_PATTERN }}
+          path: ${{ env.RELEASE_GITHUB_ARTIFACT_PATH }}
           merge-multiple: true
 
       - name: 📂 List Downloaded Artifacts
         env:
-          ARTIFACT_PATH: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATH || './release-files' }}
+          ARTIFACT_PATH: ${{ env.RELEASE_GITHUB_ARTIFACT_PATH }}
         run: |
           echo "=== Downloaded Artifacts ==="
           if [ -d "$ARTIFACT_PATH" ]; then
@@ -933,7 +1056,7 @@ jobs:
 
       - name: 🧹 Remove Internal Workflow Artifacts
         env:
-          ARTIFACT_PATH: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATH || './release-files' }}
+          ARTIFACT_PATH: ${{ env.RELEASE_GITHUB_ARTIFACT_PATH }}
         run: |
           # Remove AI release notes - used internally by the workflow, not a release asset
           find "$ARTIFACT_PATH" -name "ai-release-notes.md" -delete 2>/dev/null || true
@@ -945,8 +1068,8 @@ jobs:
         env:
           AI_BODY: ${{ needs.generate-ai-notes.outputs.ai-body }}
           AI_GENERATED: ${{ needs.generate-ai-notes.outputs.ai-generated }}
-          CUSTOM_BODY: ${{ vars.RELEASE_GITHUB_CUSTOM_BODY }}
-          APPEND_BODY_SETTING: ${{ vars.RELEASE_GITHUB_APPEND_BODY != 'false' }}
+          CUSTOM_BODY: ${{ env.RELEASE_GITHUB_CUSTOM_BODY }}
+          APPEND_BODY_SETTING: ${{ env.RELEASE_GITHUB_APPEND_BODY != 'false' }}
           REPO_NAME: ${{ github.event.repository.name }}
           VERSION: ${{ needs.calculate-version.outputs.version }}
           ASSEMBLY_VERSION: ${{ needs.calculate-version.outputs.assembly-version }}
@@ -1074,13 +1197,13 @@ jobs:
         with:
           tag_name: ${{ needs.calculate-version.outputs.tag-name }}
           name: ${{ needs.calculate-version.outputs.release-name }}
-          files: ${{ vars.RELEASE_GITHUB_ARTIFACT_PATH || './release-files' }}/${{ vars.RELEASE_GITHUB_FILES_PATTERN || '*' }}
-          draft: ${{ vars.RELEASE_GITHUB_DRAFT == 'true' }}
+          files: ${{ env.RELEASE_GITHUB_ARTIFACT_PATH }}/${{ env.RELEASE_GITHUB_FILES_PATTERN }}
+          draft: ${{ env.RELEASE_GITHUB_DRAFT == 'true' }}
           prerelease: ${{ needs.calculate-version.outputs.is-prerelease == 'true' }}
-          generate_release_notes: ${{ vars.RELEASE_GITHUB_GENERATE_NOTES != 'false' }}
+          generate_release_notes: ${{ env.RELEASE_GITHUB_GENERATE_NOTES != 'false' }}
           append_body: ${{ steps.prepare-body.outputs.append-body }}
           target_commitish: ${{ github.sha }}
-          discussion_category_name: ${{ vars.RELEASE_GITHUB_DISCUSSION_ENABLED != 'false' && (vars.RELEASE_GITHUB_DISCUSSION_CATEGORY || 'announcements') || '' }}
+          discussion_category_name: ${{ env.RELEASE_GITHUB_DISCUSSION_ENABLED != 'false' && env.RELEASE_GITHUB_DISCUSSION_CATEGORY || '' }}
           body: ${{ steps.prepare-body.outputs.body }}
 
       - name: ✅ Release Created Successfully
