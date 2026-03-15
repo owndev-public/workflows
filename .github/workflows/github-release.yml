@@ -1139,7 +1139,7 @@ jobs:
             echo "| **🐛 Report Issues** | [${REPO_FULL}/issues](${SERVER_URL}/${REPO_FULL}/issues) |"
             echo "| **💬 Discussions** | [${REPO_FULL}/discussions](${SERVER_URL}/${REPO_FULL}/discussions) |"
             echo "| **📚 Documentation** | [${REPO_FULL}/wiki](${SERVER_URL}/${REPO_FULL}/wiki) |"
-            echo """
+            echo ""
           } > /tmp/footer-body.md
 
           # Combine: Standard Metadata → AI/Custom Content → Footer
