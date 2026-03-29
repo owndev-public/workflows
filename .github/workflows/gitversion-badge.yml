@@ -107,7 +107,7 @@ jobs:
 
       # ✅ Install GitVersion
       - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@9e1eaa4b0ef87fbe9505ff2232592583b6ba9d13
+        uses: gittools/actions/gitversion/setup@35de2db50983289eebad195dbb2f440fb7741745
         with:
           versionSpec: ${{ env.GITVERSION_VERSION_SPEC }}
           preferLatestVersion: true
@@ -131,7 +131,7 @@ jobs:
       # ✅ GitVersion Calculate
       - name: 🔍 Determine version
         id: gitversion
-        uses: gittools/actions/gitversion/execute@9e1eaa4b0ef87fbe9505ff2232592583b6ba9d13
+        uses: gittools/actions/gitversion/execute@35de2db50983289eebad195dbb2f440fb7741745
 
       # ✅ GitFlow Branch Color and Name Logic
       - name: 🎨 Determine GitFlow Badge Configuration
