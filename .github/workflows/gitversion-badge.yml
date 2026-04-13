@@ -107,7 +107,7 @@ jobs:
 
       # ✅ Install GitVersion
       - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@9e1eaa4b0ef87fbe9505ff2232592583b6ba9d13
+        uses: gittools/actions/gitversion/setup@af891ce71a0d91559d2a939d07bc15da0642adf3
         with:
           versionSpec: ${{ env.GITVERSION_VERSION_SPEC }}
           preferLatestVersion: true
@@ -131,7 +131,7 @@ jobs:
       # ✅ GitVersion Calculate
       - name: 🔍 Determine version
         id: gitversion
-        uses: gittools/actions/gitversion/execute@9e1eaa4b0ef87fbe9505ff2232592583b6ba9d13
+        uses: gittools/actions/gitversion/execute@af891ce71a0d91559d2a939d07bc15da0642adf3
 
       # ✅ GitFlow Branch Color and Name Logic
       - name: 🎨 Determine GitFlow Badge Configuration
@@ -200,7 +200,7 @@ jobs:
 
       # ✅ Create Badge with emibcn/badge-action V2.0.3
       - name: 🏷️ Create GitVersion Badge
-        uses: emibcn/badge-action@808173dd03e2f30c980d03ee49e181626088eee8
+        uses: emibcn/badge-action@f9150fde070fcca0c4e832437611b44838fcd325
         id: badge
         with:
           label: ${{ steps.badge-config.outputs.label }}
