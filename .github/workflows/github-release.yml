@@ -352,7 +352,7 @@ jobs:
 
       - name: 🛠️ Install GitVersion
         if: env.RELEASE_GITHUB_USE_GITVERSION != 'false'
-        uses: gittools/actions/gitversion/setup@029d0080acdea65d5127677fa2023e0a4647b2a7
+        uses: gittools/actions/gitversion/setup@404d378222fb15c4c1085d6ea5e85fa3a3daaa3e
         with:
           versionSpec: ${{ env.GITVERSION_VERSION_SPEC }}
           preferLatestVersion: true
@@ -360,7 +360,7 @@ jobs:
       - name: 🔢 Determine version
         if: env.RELEASE_GITHUB_USE_GITVERSION != 'false'
         id: gitversion
-        uses: gittools/actions/gitversion/execute@029d0080acdea65d5127677fa2023e0a4647b2a7
+        uses: gittools/actions/gitversion/execute@404d378222fb15c4c1085d6ea5e85fa3a3daaa3e
 
       - name: 🔢 Fallback version calculation
         if: env.RELEASE_GITHUB_USE_GITVERSION == 'false'
@@ -553,7 +553,7 @@ jobs:
       - name: 💾 Restore Project Description Cache
         id: description-cache
         if: env.RELEASE_AI_PROJECT_DESCRIPTION == ''
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: /tmp/project-description-cache
           key: project-description-${{ hashFiles('README.md', 'docs/**/*.md', '.github/copilot-instructions.md') }}
