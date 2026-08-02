@@ -352,7 +352,7 @@ jobs:
 
       - name: 🛠️ Install GitVersion
         if: env.RELEASE_GITHUB_USE_GITVERSION != 'false'
-        uses: gittools/actions/gitversion/setup@8fe64f54cb14bdb2f08aaea97f9e273f8451cb7a
+        uses: gittools/actions/gitversion/setup@00a7e3bd68d44b68052704db7914a73c76159744
         with:
           versionSpec: ${{ env.GITVERSION_VERSION_SPEC }}
           preferLatestVersion: true
@@ -360,7 +360,7 @@ jobs:
       - name: 🔢 Determine version
         if: env.RELEASE_GITHUB_USE_GITVERSION != 'false'
         id: gitversion
-        uses: gittools/actions/gitversion/execute@8fe64f54cb14bdb2f08aaea97f9e273f8451cb7a
+        uses: gittools/actions/gitversion/execute@00a7e3bd68d44b68052704db7914a73c76159744
 
       - name: 🔢 Fallback version calculation
         if: env.RELEASE_GITHUB_USE_GITVERSION == 'false'
@@ -711,7 +711,7 @@ jobs:
         id: ai-describe
         if: steps.resolve-description.outputs.needs-ai == 'true'
         continue-on-error: true
-        uses: actions/ai-inference@v2
+        uses: actions/ai-inference@v3
         with:
           token: ${{ secrets.release_ai_token || secrets.RELEASE_AI_TOKEN || github.token }}
           system-prompt-file: /tmp/summarize-system-prompt.txt
@@ -908,7 +908,7 @@ jobs:
 
       - name: 🤖 Generate AI Release Notes
         id: ai-generate
-        uses: actions/ai-inference@v2
+        uses: actions/ai-inference@v3
         with:
           token: ${{ secrets.release_ai_token || secrets.RELEASE_AI_TOKEN || github.token }}
           system-prompt-file: /tmp/system-prompt.txt
