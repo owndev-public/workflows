@@ -111,31 +111,40 @@
 #
 # === AI RELEASE NOTES SETTINGS ===
 # RELEASE_AI_ENABLED: Enable AI-generated release notes ("true", "false")
-#   - When enabled, uses GitHub Models API to generate developer-focused release notes
-#   - Optionally uses RELEASE_AI_TOKEN secret (GitHub PAT with models:read scope)
+#   - When enabled, uses the GitHub Copilot CLI via actions/ai-inference v3 to generate
+#     developer-focused release notes. GitHub Models was retired 2026-07-30:
+#     https://github.blog/changelog/2026-07-30-github-models-is-now-retired/
+#   - The CALLING workflow must grant 'permissions: copilot-requests: write'. A called workflow
+#     cannot add it -- it can only downgrade the caller's GITHUB_TOKEN
+#   - In organization repositories the usage is billed to the ORGANIZATION, which requires the
+#     org policy "Allow use of Copilot CLI billed to the organization" to be enabled
 #   - Uses GitHub Environment with Required Reviewers for approval before publishing
 #   - AI-generated body is combined with GitHub's auto-generated notes (append_body)
 #   - Default: "false"
 #
-# RELEASE_AI_MODEL: GitHub Models model ID for AI generation
-#   - Format: "{publisher}/{model_name}" (e.g., "openai/gpt-4.1", "openai/gpt-4o-mini")
-#   - Must be a model available in the GitHub Models catalog
-#   - Default: "openai/gpt-4.1" (recommended for large releases with many commits)
+# RELEASE_AI_MODEL: Copilot CLI model ID for AI generation
+#   - OPTIONAL. Leave unset to follow the Copilot account default -- the safe choice, because a
+#     pinned id stops working the day GitHub retires that model from the CLI catalogue. That is
+#     exactly what happened to "gpt-4.1" on its 2026-06-01 deprecation date
+#   - Bare id only, WITHOUT publisher prefix. A GitHub Models style value containing "/"
+#     (e.g. "openai/gpt-4.1") is rejected by the CLI; this workflow fails fast on it
+#   - Run `copilot` and use /model to list the ids currently selectable for your account
+#   - Default: (Copilot account default)
 #
 # RELEASE_AI_LANGUAGE: Output language for AI-generated release notes
 #   - ISO language code (e.g., "en", "de", "fr", "es")
 #   - Controls the language of the generated summary text
 #   - Default: "en"
 #
-# RELEASE_AI_MAX_TOKENS: Maximum output tokens for AI generation
-#   - Higher values allow longer, more detailed release notes
-#   - Must not exceed the model's context limit
-#   - Default: "4096" (optimized for comprehensive release notes)
+# RELEASE_AI_MAX_TOKENS: IGNORED since actions/ai-inference v3
+#   - v3 drives the Copilot CLI, which exposes no output-token limit. The workflow warns when the
+#     variable is set so it can be deleted
+#   - Default: (none)
 #
-# RELEASE_AI_TEMPERATURE: AI creativity/randomness (0.0 - 1.0)
-#   - Lower values produce more focused, deterministic output
-#   - Higher values produce more creative, varied output
-#   - Default: "0.4" (focused and consistent for release notes)
+# RELEASE_AI_TEMPERATURE: IGNORED since actions/ai-inference v3
+#   - v3 drives the Copilot CLI, which exposes no temperature knob. The workflow warns when the
+#     variable is set so it can be deleted
+#   - Default: (none)
 #
 # RELEASE_AI_CUSTOM_PROMPT: Custom system prompt override for AI generation
 #   - When set, replaces the default system prompt entirely
@@ -164,12 +173,12 @@
 #   - Reviewer can inspect the full AI input/output in the Step Summary before approving
 #
 # === SECRETS ===
-# RELEASE_AI_TOKEN: Personal GitHub PAT with models:read scope (optional, falls back to GITHUB_TOKEN)
-#   - Used to authenticate with the GitHub Models inference API via actions/ai-inference
-#   - Only PERSONAL PATs (classic or fine-grained with models:read) are supported
-#   - Organization-scoped PATs will receive HTTP 403 (models:read is a user-level scope)
-#   - If not set, the workflow uses GITHUB_TOKEN which works when the calling workflow
-#     declares 'permissions: models: read' (recommended for enterprise/org billing)
+# RELEASE_AI_TOKEN: Personal GitHub PAT (optional, falls back to GITHUB_TOKEN)
+#   - Exported as COPILOT_GITHUB_TOKEN; the Copilot CLI authenticates from that env var
+#   - No scope is required on the PAT -- the entitlement comes from copilot-requests: write
+#   - Organization-scoped PATs do NOT work (403); only personal PATs or GITHUB_TOKEN
+#   - Not needed since https://github.blog/changelog/2026-07-02-copilot-cli-no-longer-needs-a-personal-access-token-in-github-actions/
+#     GITHUB_TOKEN is sufficient when the caller grants copilot-requests: write
 #   - The calling workflow must use secrets: inherit to pass this secret
 #
 # SECURITY CONSIDERATIONS:
@@ -177,8 +186,8 @@
 # - Uses GITHUB_TOKEN for authentication (automatically provided)
 # - No sensitive data is exposed in release metadata
 # - Artifacts are downloaded from the same workflow run only
-# - AI generation uses actions/ai-inference for secure GitHub Models API interaction
-# - RELEASE_AI_TOKEN is used for GitHub Models API authentication (falls back to GITHUB_TOKEN)
+# - AI generation uses actions/ai-inference v3, which spawns the GitHub Copilot CLI
+# - RELEASE_AI_TOKEN is exported as COPILOT_GITHUB_TOKEN (falls back to GITHUB_TOKEN)
 
 name: 🏷️ GitHub Release
 
@@ -186,7 +195,12 @@ permissions:
   contents: write
   actions: read
   discussions: write
-  models: read
+  # actions/ai-inference v3 reaches the model through the GitHub Copilot CLI, which is entitled by
+  # `copilot-requests: write`. The former `models: read` addressed GitHub Models, retired 2026-07-30.
+  # Callers must grant this scope: a called workflow can only downgrade the caller's GITHUB_TOKEN,
+  # never elevate it, so requesting a scope the caller lacks fails the run outright with
+  # "The workflow is requesting 'X', but is only allowed 'X: none'".
+  copilot-requests: write
 
 on:
   push:
@@ -287,7 +301,9 @@ on:
         type: string
     secrets:
       release_ai_token:
-        description: Personal token with models:read for GitHub Models.
+        description: >-
+          Optional personal GitHub PAT, exported as COPILOT_GITHUB_TOKEN. No scope required; the
+          entitlement comes from copilot-requests: write in the caller. GITHUB_TOKEN suffices.
         required: false
   workflow_dispatch:
 
@@ -423,7 +439,11 @@ jobs:
       name: ${{ inputs.release_ai_review_environment || vars.RELEASE_AI_REVIEW_ENVIRONMENT || needs.determine-environment.outputs.environment }}
     env:
       RELEASE_AI_ENABLED: ${{ inputs.release_ai_enabled || vars.RELEASE_AI_ENABLED || 'false' }}
-      RELEASE_AI_MODEL: ${{ inputs.release_ai_model || vars.RELEASE_AI_MODEL || 'openai/gpt-4.1' }}
+      # Deliberately NOT defaulted. actions/ai-inference omits --model when this is empty, and the
+      # Copilot CLI then uses the account default, which by construction always exists. A pinned id
+      # is a dated dependency on GitHub's catalogue -- 'gpt-4.1' was retired on 2026-06-01 and the
+      # CLI now refuses it with "Model 'gpt-4.1' from --model flag is not available".
+      RELEASE_AI_MODEL: ${{ inputs.release_ai_model || vars.RELEASE_AI_MODEL }}
       RELEASE_AI_LANGUAGE: ${{ inputs.release_ai_language || vars.RELEASE_AI_LANGUAGE || 'en' }}
       RELEASE_AI_MAX_TOKENS: ${{ inputs.release_ai_max_tokens || vars.RELEASE_AI_MAX_TOKENS || '4096' }}
       RELEASE_AI_TEMPERATURE: ${{ inputs.release_ai_temperature || vars.RELEASE_AI_TEMPERATURE || '0.4' }}
@@ -707,18 +727,69 @@ jobs:
           } >> $GITHUB_STEP_SUMMARY
         shell: bash
 
+      # actions/ai-inference v3 spawns the GitHub Copilot CLI, which is NOT pre-installed on
+      # GitHub-hosted runners. Without this step both AI steps below fail before reaching a model.
+      - name: 🟢 Setup Node.js for Copilot CLI
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: 24
+
+      - name: 🤖 Install GitHub Copilot CLI
+        run: |
+          npm install -g @github/copilot
+          # The version is not pinned -- this takes latest. Record it: a release that worked
+          # yesterday and fails today may simply have picked up a new CLI.
+          echo "Copilot CLI version: $(copilot --version 2>&1 | head -1)"
+
+          # v3 keeps the CLI's stderr out of the log unless ACTIONS_STEP_DEBUG is set, and the CLI
+          # puts the decisive backend error in its OWN log rather than on stderr -- see
+          # github/copilot-cli#3396, where "exited with code 1" hid a 400 from the models endpoint.
+          # logLevel 'all' is what makes that log usable; the steps below print it when a call fails.
+          # An existing settings.json is left alone: on a self-hosted runner it is the operator's.
+          COPILOT_SETTINGS="${COPILOT_HOME:-$HOME/.copilot}/settings.json"
+          if [[ ! -f "$COPILOT_SETTINGS" ]]; then
+            mkdir -p "$(dirname "$COPILOT_SETTINGS")"
+            printf '{"logLevel":"all"}\n' > "$COPILOT_SETTINGS"
+            echo "Enabled verbose Copilot CLI logging in $COPILOT_SETTINGS"
+          else
+            echo "Keeping existing $COPILOT_SETTINGS (logLevel not overridden)"
+          fi
+
+          # Copilot CLI expects a bare model id. GitHub Models used publisher-prefixed ids
+          # ("openai/gpt-4.1"), which the CLI rejects outright. Fail fast with a fixable message.
+          if [[ -n "$RELEASE_AI_MODEL" && "$RELEASE_AI_MODEL" == */* ]]; then
+            echo "::error title=Invalid RELEASE_AI_MODEL::'$RELEASE_AI_MODEL' is a GitHub Models id (publisher prefix). Copilot CLI needs a bare id, e.g. 'gpt-5-mini'. Leave RELEASE_AI_MODEL empty to use the Copilot account default."
+            exit 1
+          fi
+
+          # A bare id is necessary but not sufficient: it must still be in the CLI's CURRENT
+          # catalogue. Not checkable here without spending a request, so only a warning -- the CLI
+          # reports it precisely and the failure paths below print that log.
+          if [[ -n "$RELEASE_AI_MODEL" ]]; then
+            echo "::warning title=Pinned AI model::RELEASE_AI_MODEL is pinned to '$RELEASE_AI_MODEL'. A pinned id fails once GitHub retires that model from the Copilot CLI catalogue -- which is exactly what happened to 'gpt-4.1' on its 2026-06-01 deprecation date. Unset the variable to follow the account default."
+          fi
+
+          # v3 dropped every determinism knob; these variables no longer have any effect.
+          if [[ -n "$RELEASE_AI_MAX_TOKENS" || -n "$RELEASE_AI_TEMPERATURE" ]]; then
+            echo "::warning title=Obsolete AI variables::RELEASE_AI_MAX_TOKENS and RELEASE_AI_TEMPERATURE are ignored by actions/ai-inference v3 and can be deleted."
+          fi
+        shell: bash
+
       - name: "🧠 AI: Summarize Project Description"
         id: ai-describe
         if: steps.resolve-description.outputs.needs-ai == 'true'
         continue-on-error: true
-        uses: actions/ai-inference@v3
+        uses: actions/ai-inference@2c43c91ae16266ca159d311430343c67a5ffa222 # v3
+        env:
+          # v3 passes `token` only to core.setSecret() for log masking; the CLI authenticates from
+          # inherited env (COPILOT_GITHUB_TOKEN, GH_TOKEN, GITHUB_TOKEN).
+          COPILOT_GITHUB_TOKEN: ${{ secrets.release_ai_token || secrets.RELEASE_AI_TOKEN || github.token }}
         with:
           token: ${{ secrets.release_ai_token || secrets.RELEASE_AI_TOKEN || github.token }}
           system-prompt-file: /tmp/summarize-system-prompt.txt
           prompt-file: /tmp/summarize-user-prompt.txt
+          # Empty means no --model, i.e. the Copilot account default. See the job env block.
           model: ${{ env.RELEASE_AI_MODEL }}
-          max-completion-tokens: 1024
-          temperature: 0.3
 
       - name: 💾 Finalize Project Description
         id: finalize-description
@@ -744,19 +815,36 @@ jobs:
 
           # AI was needed — check if it succeeded
           if [[ "$AI_OUTCOME" != "success" || -z "$AI_RESPONSE_FILE" || ! -f "$AI_RESPONSE_FILE" ]]; then
-            echo "::warning::Failed to auto-generate project description. Continuing without."
-            echo "project-description=" >> "$GITHUB_OUTPUT"
-            echo "description-source=none" >> "$GITHUB_OUTPUT"
-            exit 0
+            # A failed AI call aborts the release rather than shipping notes built from less
+            # context than intended.
+            echo "::error title=Copilot CLI failed::Project description generation failed (outcome '$AI_OUTCOME'). Diagnostics below."
+            {
+              echo "--- Copilot CLI diagnostics ---"
+              echo "actions/ai-inference v3 suppresses the CLI's stderr unless ACTIONS_STEP_DEBUG=true,"
+              echo "and the CLI writes the decisive backend error to its own log (copilot-cli#3396)."
+              COPILOT_LOG_DIR="${COPILOT_HOME:-$HOME/.copilot}/logs"
+              LATEST_LOG=$(ls -1t "$COPILOT_LOG_DIR"/process-*.log 2>/dev/null | head -1 || true)
+              if [[ -n "$LATEST_LOG" ]]; then
+                echo "--- $LATEST_LOG (last 200 lines) ---"
+                tail -n 200 "$LATEST_LOG"
+              else
+                echo "(no CLI log found under $COPILOT_LOG_DIR)"
+              fi
+              echo "--- preconditions, in the order worth checking ---"
+              echo "  1. Org policy 'Allow use of Copilot CLI billed to the organization' is enabled (usage in an org repository is metered to the organization)."
+              echo "  2. The organization has Copilot enabled at all -- with seat management unconfigured or disabled the request cannot be served, even though the token carries copilot-requests: write."
+              echo "  3. The caller grants 'permissions: copilot-requests: write'. The job log's 'GITHUB_TOKEN Permissions' group shows whether it arrived."
+              echo "  4. RELEASE_AI_MODEL, if set, is a bare id that is STILL in the CLI's catalogue. A publisher-prefixed or retired id fails with \"Model 'X' from --model flag is not available\" -- unset the variable to follow the account default."
+              echo "  5. ACTIONS_STEP_DEBUG=true adds the CLI's stderr on top of the log above."
+            } >&2
+            exit 1
           fi
 
           DESCRIPTION=$(cat "$AI_RESPONSE_FILE")
 
           if [[ -z "$DESCRIPTION" ]]; then
-            echo "::warning::AI returned empty project description. Continuing without."
-            echo "project-description=" >> "$GITHUB_OUTPUT"
-            echo "description-source=none" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error title=Empty project description::The model returned no content. Aborting rather than shipping a release generated from less context than intended."
+            exit 1
           fi
 
           # Flatten to single line for GitHub Output
@@ -908,24 +996,59 @@ jobs:
 
       - name: 🤖 Generate AI Release Notes
         id: ai-generate
-        uses: actions/ai-inference@v3
+        # Not to tolerate the failure -- the next step still fails the job -- but so that the next
+        # step RUNS and can print the CLI's own log. Without it the report is a bare red step.
+        continue-on-error: true
+        uses: actions/ai-inference@2c43c91ae16266ca159d311430343c67a5ffa222 # v3
+        env:
+          # v3 passes `token` only to core.setSecret() for log masking; the CLI authenticates from
+          # inherited env (COPILOT_GITHUB_TOKEN, GH_TOKEN, GITHUB_TOKEN).
+          COPILOT_GITHUB_TOKEN: ${{ secrets.release_ai_token || secrets.RELEASE_AI_TOKEN || github.token }}
         with:
           token: ${{ secrets.release_ai_token || secrets.RELEASE_AI_TOKEN || github.token }}
           system-prompt-file: /tmp/system-prompt.txt
           prompt-file: /tmp/user-prompt.txt
+          # Empty means no --model, i.e. the Copilot account default. See the job env block.
           model: ${{ env.RELEASE_AI_MODEL }}
-          max-completion-tokens: ${{ env.RELEASE_AI_MAX_TOKENS }}
-          temperature: ${{ env.RELEASE_AI_TEMPERATURE }}
 
       - name: 📊 Process AI Release Notes
         id: process-notes
         env:
+          AI_OUTCOME: ${{ steps.ai-generate.outcome }}
           AI_RESPONSE_FILE: ${{ steps.ai-generate.outputs.response-file }}
         run: |
+          # Without this guard the step ran `cat ""` on a failed generation, which under `bash -e`
+          # failed with no explanation. A failure aborts the release: create-release requires this
+          # job to be 'success' or 'skipped', and no release beats one with the notes missing.
+          if [[ "$AI_OUTCOME" != "success" || -z "$AI_RESPONSE_FILE" || ! -f "$AI_RESPONSE_FILE" ]]; then
+            echo "::error title=AI release notes failed::Generation outcome was '$AI_OUTCOME'. Diagnostics below."
+            {
+              echo "--- Copilot CLI diagnostics ---"
+              echo "actions/ai-inference v3 suppresses the CLI's stderr unless ACTIONS_STEP_DEBUG=true,"
+              echo "and the CLI writes the decisive backend error to its own log (copilot-cli#3396)."
+              COPILOT_LOG_DIR="${COPILOT_HOME:-$HOME/.copilot}/logs"
+              LATEST_LOG=$(ls -1t "$COPILOT_LOG_DIR"/process-*.log 2>/dev/null | head -1 || true)
+              if [[ -n "$LATEST_LOG" ]]; then
+                echo "--- $LATEST_LOG (last 200 lines) ---"
+                tail -n 200 "$LATEST_LOG"
+              else
+                echo "(no CLI log found under $COPILOT_LOG_DIR)"
+              fi
+              echo "--- preconditions, in the order worth checking ---"
+              echo "  1. Org policy 'Allow use of Copilot CLI billed to the organization' is enabled (usage in an org repository is metered to the organization)."
+              echo "  2. The organization has Copilot enabled at all -- with seat management unconfigured or disabled the request cannot be served, even though the token carries copilot-requests: write."
+              echo "  3. The caller grants 'permissions: copilot-requests: write'. The job log's 'GITHUB_TOKEN Permissions' group shows whether it arrived."
+              echo "  4. RELEASE_AI_MODEL, if set, is a bare id that is STILL in the CLI's catalogue. A publisher-prefixed or retired id fails with \"Model 'X' from --model flag is not available\" -- unset the variable to follow the account default."
+              echo "  5. ACTIONS_STEP_DEBUG=true adds the CLI's stderr on top of the log above."
+            } >&2
+            echo "ai-generated=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
           AI_CONTENT=$(cat "$AI_RESPONSE_FILE")
 
           if [[ -z "$AI_CONTENT" ]]; then
-            echo "::error::AI response contained no content"
+            echo "::error title=Empty AI release notes::The model returned no content. Aborting rather than publishing a release without the notes that were asked for."
             echo "ai-generated=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi

@@ -195,17 +195,25 @@ Reusable workflow inputs for cross-org callers:
 ### 🤖 AI Release Notes Variables
 
 > [!NOTE]
-> AI release notes are optional. If `RELEASE_AI_TOKEN` is not configured, the
-> workflow falls back to `GITHUB_TOKEN`. In that case the calling workflow must
-> grant `permissions: models: read`.
+> AI release notes are optional. The calling workflow must grant
+> `permissions: copilot-requests: write` — a called workflow can only downgrade the
+> caller's `GITHUB_TOKEN`, never elevate it. `RELEASE_AI_TOKEN` is optional and needs
+> no scope; without it the workflow uses `GITHUB_TOKEN`, which
+> [suffices since 2026-07-02](https://github.blog/changelog/2026-07-02-copilot-cli-no-longer-needs-a-personal-access-token-in-github-actions/).
+>
+> The permission alone is not enough: Copilot CLI usage in an organisation repository is
+> metered to the organisation, so the org policy **"Allow use of Copilot CLI billed to the
+> organization"** must be active and the organisation must have Copilot enabled. A failure
+> aborts the workflow — no release is created — and the job log carries the CLI's own log
+> plus a checklist.
 
 | Variable | Type | Default | Description |
 | --- | --- | --- | --- |
 | `RELEASE_AI_ENABLED` | string | `false` | Enable AI-generated release notes |
-| `RELEASE_AI_MODEL` | string | `openai/gpt-4.1` | GitHub Models model ID |
+| `RELEASE_AI_MODEL` | string | _(Copilot default)_ | **Optional.** Unset means the Copilot account default. A pinned id fails once GitHub retires that model from the CLI catalogue — as happened to `gpt-4.1` on 2026-06-01. Bare id only, a `/` is rejected |
 | `RELEASE_AI_LANGUAGE` | string | `en` | Output language |
-| `RELEASE_AI_MAX_TOKENS` | string | `4096` | Maximum completion tokens |
-| `RELEASE_AI_TEMPERATURE` | string | `0.4` | Generation temperature |
+| `RELEASE_AI_MAX_TOKENS` | string | _(none)_ | **Ignored** since ai-inference v3 — the Copilot CLI exposes no such knob |
+| `RELEASE_AI_TEMPERATURE` | string | _(none)_ | **Ignored** since ai-inference v3 — the Copilot CLI exposes no such knob |
 | `RELEASE_AI_CUSTOM_PROMPT` | string | empty | Override the built-in system prompt |
 | `RELEASE_AI_PROJECT_DESCRIPTION` | string | auto-generated | Project description used as release note context |
 | `RELEASE_AI_MAX_COMMITS` | string | `500` | Maximum commits analyzed by the AI step |
@@ -250,7 +258,7 @@ Reusable workflow inputs for cross-org callers:
 | --- | --- | --- | --- |
 | `GITHUB_TOKEN` | automatic | all workflows | Built-in token for repository access |
 | `GITVERSION_BADGE_REPO_TOKEN` | optional | GitVersion Badge | Token with push access to the badge repository |
-| `RELEASE_AI_TOKEN` | optional | GitHub Release | Personal token with `models:read` for GitHub Models |
+| `RELEASE_AI_TOKEN` | optional | GitHub Release | Personal token, **no scope required** — exported as `COPILOT_GITHUB_TOKEN`. Falls back to `GITHUB_TOKEN` |
 
 Reusable workflow secret mappings for cross-org callers:
 
