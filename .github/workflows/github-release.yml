@@ -136,16 +136,6 @@
 #   - Controls the language of the generated summary text
 #   - Default: "en"
 #
-# RELEASE_AI_MAX_TOKENS: IGNORED since actions/ai-inference v3
-#   - v3 drives the Copilot CLI, which exposes no output-token limit. The workflow warns when the
-#     variable is set so it can be deleted
-#   - Default: (none)
-#
-# RELEASE_AI_TEMPERATURE: IGNORED since actions/ai-inference v3
-#   - v3 drives the Copilot CLI, which exposes no temperature knob. The workflow warns when the
-#     variable is set so it can be deleted
-#   - Default: (none)
-#
 # RELEASE_AI_CUSTOM_PROMPT: Custom system prompt override for AI generation
 #   - When set, replaces the default system prompt entirely
 #   - Use for custom formatting, tone, or content requirements
@@ -273,14 +263,6 @@ on:
         type: string
       release_ai_language:
         description: Output language for AI release notes.
-        required: false
-        type: string
-      release_ai_max_tokens:
-        description: Maximum completion tokens for AI release notes.
-        required: false
-        type: string
-      release_ai_temperature:
-        description: AI temperature value.
         required: false
         type: string
       release_ai_custom_prompt:
@@ -445,8 +427,6 @@ jobs:
       # CLI now refuses it with "Model 'gpt-4.1' from --model flag is not available".
       RELEASE_AI_MODEL: ${{ inputs.release_ai_model || vars.RELEASE_AI_MODEL }}
       RELEASE_AI_LANGUAGE: ${{ inputs.release_ai_language || vars.RELEASE_AI_LANGUAGE || 'en' }}
-      RELEASE_AI_MAX_TOKENS: ${{ inputs.release_ai_max_tokens || vars.RELEASE_AI_MAX_TOKENS || '4096' }}
-      RELEASE_AI_TEMPERATURE: ${{ inputs.release_ai_temperature || vars.RELEASE_AI_TEMPERATURE || '0.4' }}
       RELEASE_AI_CUSTOM_PROMPT: ${{ inputs.release_ai_custom_prompt || vars.RELEASE_AI_CUSTOM_PROMPT }}
       RELEASE_AI_PROJECT_DESCRIPTION: ${{ inputs.release_ai_project_description || vars.RELEASE_AI_PROJECT_DESCRIPTION }}
       RELEASE_AI_MAX_COMMITS: ${{ inputs.release_ai_max_commits || vars.RELEASE_AI_MAX_COMMITS || '500' }}
@@ -703,8 +683,6 @@ jobs:
             echo "| **Description Source** | \`Tier 3: AI-generated from docs\` |"
             echo "| **Documentation Size** | \`${DOC_CHAR_COUNT} chars\` |"
             echo "| **Model** | \`${{ env.RELEASE_AI_MODEL }}\` |"
-            echo "| **Max Tokens** | \`1024\` |"
-            echo "| **Temperature** | \`0.3\` |"
             echo ""
             echo "<details>"
             echo "<summary>📋 Summarization System Prompt (click to expand)</summary>"
@@ -767,11 +745,6 @@ jobs:
           # reports it precisely and the failure paths below print that log.
           if [[ -n "$RELEASE_AI_MODEL" ]]; then
             echo "::warning title=Pinned AI model::RELEASE_AI_MODEL is pinned to '$RELEASE_AI_MODEL'. A pinned id fails once GitHub retires that model from the Copilot CLI catalogue -- which is exactly what happened to 'gpt-4.1' on its 2026-06-01 deprecation date. Unset the variable to follow the account default."
-          fi
-
-          # v3 dropped every determinism knob; these variables no longer have any effect.
-          if [[ -n "$RELEASE_AI_MAX_TOKENS" || -n "$RELEASE_AI_TEMPERATURE" ]]; then
-            echo "::warning title=Obsolete AI variables::RELEASE_AI_MAX_TOKENS and RELEASE_AI_TEMPERATURE are ignored by actions/ai-inference v3 and can be deleted."
           fi
         shell: bash
 
@@ -877,8 +850,6 @@ jobs:
         env:
           AI_MODEL: ${{ env.RELEASE_AI_MODEL }}
           AI_LANGUAGE: ${{ env.RELEASE_AI_LANGUAGE }}
-          AI_MAX_TOKENS: ${{ env.RELEASE_AI_MAX_TOKENS }}
-          AI_TEMPERATURE: ${{ env.RELEASE_AI_TEMPERATURE }}
           AI_CUSTOM_PROMPT: ${{ env.RELEASE_AI_CUSTOM_PROMPT }}
           AI_PROJECT_DESCRIPTION: ${{ steps.finalize-description.outputs.project-description }}
           DESCRIPTION_SOURCE: ${{ steps.finalize-description.outputs.description-source }}
@@ -962,8 +933,6 @@ jobs:
             echo "|---|---|"
             echo "| **Model** | \`$AI_MODEL\` |"
             echo "| **Language** | \`$AI_LANGUAGE\` |"
-            echo "| **Max Tokens** | \`$AI_MAX_TOKENS\` |"
-            echo "| **Temperature** | \`$AI_TEMPERATURE\` |"
             echo "| **Version** | \`$VERSION\` |"
             echo "| **Previous Tag** | \`${LAST_TAG:-'(first release)'}\` |"
             echo "| **Release Type** | \`$RELEASE_TYPE\` |"

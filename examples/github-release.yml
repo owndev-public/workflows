@@ -75,8 +75,6 @@ jobs:
       release_ai_enabled: ${{ vars.RELEASE_AI_ENABLED }}
       release_ai_model: ${{ vars.RELEASE_AI_MODEL }}
       release_ai_language: ${{ vars.RELEASE_AI_LANGUAGE }}
-      release_ai_max_tokens: ${{ vars.RELEASE_AI_MAX_TOKENS }}
-      release_ai_temperature: ${{ vars.RELEASE_AI_TEMPERATURE }}
       release_ai_custom_prompt: ${{ vars.RELEASE_AI_CUSTOM_PROMPT }}
       release_ai_project_description: ${{ vars.RELEASE_AI_PROJECT_DESCRIPTION }}
       release_ai_max_commits: ${{ vars.RELEASE_AI_MAX_COMMITS }}

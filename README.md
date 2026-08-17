@@ -212,8 +212,6 @@ Reusable workflow inputs for cross-org callers:
 | `RELEASE_AI_ENABLED` | string | `false` | Enable AI-generated release notes |
 | `RELEASE_AI_MODEL` | string | _(Copilot default)_ | **Optional.** Unset means the Copilot account default. A pinned id fails once GitHub retires that model from the CLI catalogue — as happened to `gpt-4.1` on 2026-06-01. Bare id only, a `/` is rejected |
 | `RELEASE_AI_LANGUAGE` | string | `en` | Output language |
-| `RELEASE_AI_MAX_TOKENS` | string | _(none)_ | **Ignored** since ai-inference v3 — the Copilot CLI exposes no such knob |
-| `RELEASE_AI_TEMPERATURE` | string | _(none)_ | **Ignored** since ai-inference v3 — the Copilot CLI exposes no such knob |
 | `RELEASE_AI_CUSTOM_PROMPT` | string | empty | Override the built-in system prompt |
 | `RELEASE_AI_PROJECT_DESCRIPTION` | string | auto-generated | Project description used as release note context |
 | `RELEASE_AI_MAX_COMMITS` | string | `500` | Maximum commits analyzed by the AI step |
@@ -240,8 +238,6 @@ Reusable workflow inputs for cross-org callers:
 | `release_ai_enabled` | `RELEASE_AI_ENABLED` |
 | `release_ai_model` | `RELEASE_AI_MODEL` |
 | `release_ai_language` | `RELEASE_AI_LANGUAGE` |
-| `release_ai_max_tokens` | `RELEASE_AI_MAX_TOKENS` |
-| `release_ai_temperature` | `RELEASE_AI_TEMPERATURE` |
 | `release_ai_custom_prompt` | `RELEASE_AI_CUSTOM_PROMPT` |
 | `release_ai_project_description` | `RELEASE_AI_PROJECT_DESCRIPTION` |
 | `release_ai_max_commits` | `RELEASE_AI_MAX_COMMITS` |
