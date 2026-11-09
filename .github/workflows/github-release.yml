@@ -350,7 +350,7 @@ jobs:
 
       - name: 🛠️ Install GitVersion
         if: env.RELEASE_GITHUB_USE_GITVERSION != 'false'
-        uses: gittools/actions/gitversion/setup@61177cd9f69111f2802e47152c74984e506c94e9
+        uses: gittools/actions/gitversion/setup@08d8553a0e624d4286a98fbd08991db7f1a59d87
         with:
           versionSpec: ${{ env.GITVERSION_VERSION_SPEC }}
           preferLatestVersion: true
@@ -358,7 +358,7 @@ jobs:
       - name: 🔢 Determine version
         if: env.RELEASE_GITHUB_USE_GITVERSION != 'false'
         id: gitversion
-        uses: gittools/actions/gitversion/execute@61177cd9f69111f2802e47152c74984e506c94e9
+        uses: gittools/actions/gitversion/execute@08d8553a0e624d4286a98fbd08991db7f1a59d87
 
       - name: 🔢 Fallback version calculation
         if: env.RELEASE_GITHUB_USE_GITVERSION == 'false'
@@ -1285,7 +1285,7 @@ jobs:
         shell: bash
 
       - name: 🏷️ Create GitHub Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3
         with:
           tag_name: ${{ needs.calculate-version.outputs.tag-name }}
           name: ${{ needs.calculate-version.outputs.release-name }}
