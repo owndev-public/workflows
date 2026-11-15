@@ -350,7 +350,7 @@ jobs:
 
       - name: 🛠️ Install GitVersion
         if: env.RELEASE_GITHUB_USE_GITVERSION != 'false'
-        uses: gittools/actions/gitversion/setup@08d8553a0e624d4286a98fbd08991db7f1a59d87
+        uses: gittools/actions/gitversion/setup@ed091b3e6bdfb74c563185b2bbff6782f68b8455
         with:
           versionSpec: ${{ env.GITVERSION_VERSION_SPEC }}
           preferLatestVersion: true
@@ -358,7 +358,7 @@ jobs:
       - name: 🔢 Determine version
         if: env.RELEASE_GITHUB_USE_GITVERSION != 'false'
         id: gitversion
-        uses: gittools/actions/gitversion/execute@08d8553a0e624d4286a98fbd08991db7f1a59d87
+        uses: gittools/actions/gitversion/execute@ed091b3e6bdfb74c563185b2bbff6782f68b8455
 
       - name: 🔢 Fallback version calculation
         if: env.RELEASE_GITHUB_USE_GITVERSION == 'false'
