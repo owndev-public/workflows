@@ -20,7 +20,7 @@ calculation:
       is-main-branch: true
       is-release-branch: false
       is-source-branch-for: []
-      label: ''
+      label: ""
       prevent-increment:
         of-merged-branch: true
       regex: "^master$|^main$"
@@ -96,7 +96,7 @@ calculation:
       is-main-branch: true
       is-release-branch: false
       is-source-branch-for: []
-      label: ''
+      label: ""
       prevent-increment:
         of-merged-branch: true
       regex: "^support[\\/-](?<BranchName>.+)"
@@ -139,7 +139,7 @@ calculation:
     of-merged-branch: false
     when-branch-merged: false
     when-current-commit-tagged: true
-  regex: ''
+  regex: ""
   semantic-version-format: Strict
   source-branches: []
   strategies:
