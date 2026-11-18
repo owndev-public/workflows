@@ -156,7 +156,7 @@ Highlights:
 | `GITVERSION_BADGE_LABEL` | string | branch name | Badge label text |
 | `GITVERSION_BADGE_COLOR` | string | branch color | Override badge color with a hex value |
 | `GITVERSION_BADGE_STYLE` | string | `classic` | Badge style (`flat` or `classic`) |
-| `GITVERSION_VERSION_SPEC` | string | `6.4.x` | GitVersion setup version spec |
+| `GITVERSION_VERSION_SPEC` | string | `7.x.x` | GitVersion setup version spec |
 
 Recommended example:
 

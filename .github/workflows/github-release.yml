@@ -327,18 +327,18 @@ jobs:
       name: ${{ needs.determine-environment.outputs.environment }}
     env:
       RELEASE_GITHUB_USE_GITVERSION: ${{ inputs.release_github_use_gitversion || vars.RELEASE_GITHUB_USE_GITVERSION || 'true' }}
-      GITVERSION_VERSION_SPEC: ${{ inputs.gitversion_version_spec || vars.GITVERSION_VERSION_SPEC || '6.4.x' }}
+      GITVERSION_VERSION_SPEC: ${{ inputs.gitversion_version_spec || vars.GITVERSION_VERSION_SPEC || '7.x.x' }}
       RELEASE_GITHUB_TAG_NAME: ${{ inputs.release_github_tag_name || vars.RELEASE_GITHUB_TAG_NAME }}
       RELEASE_GITHUB_NAME: ${{ inputs.release_github_name || vars.RELEASE_GITHUB_NAME }}
     outputs:
       version: ${{ steps.gitversion.outputs.SemVer }}
       assembly-version: ${{ steps.gitversion.outputs.AssemblySemVer }}
       informational-version: ${{ steps.gitversion.outputs.InformationalVersion }}
-      is-prerelease: ${{ steps.gitversion.outputs.PreReleaseTag != '' }}
-      pre-release-tag: ${{ steps.gitversion.outputs.PreReleaseTag }}
+      is-prerelease: ${{ steps.gitversion.outputs.PreReleaseLabel != '' }}
+      pre-release-tag: ${{ steps.gitversion.outputs.PreReleaseLabel }}
       pre-release-number: ${{ steps.gitversion.outputs.PreReleaseNumber }}
       weighted-pre-release-number: ${{ steps.gitversion.outputs.WeightedPreReleaseNumber }}
-      commits-since-version-source: ${{ steps.gitversion.outputs.CommitsSinceVersionSource }}
+      commits-since-version-source: ${{ steps.gitversion.outputs.VersionSourceDistance }}
       tag-name: ${{ steps.tag.outputs.tag-name }}
       release-name: ${{ steps.tag.outputs.release-name }}
 
@@ -350,15 +350,30 @@ jobs:
 
       - name: 🛠️ Install GitVersion
         if: env.RELEASE_GITHUB_USE_GITVERSION != 'false'
-        uses: gittools/actions/gitversion/setup@ed091b3e6bdfb74c563185b2bbff6782f68b8455
+        uses: gittools/actions/gitversion/setup@389fe43e6b0189b98c40c43553070ac029304635
         with:
           versionSpec: ${{ env.GITVERSION_VERSION_SPEC }}
           preferLatestVersion: true
 
+      # shortcut: GitVersion 7 rejects the flat v6 GitVersion.yml layout; callers not yet
+      # migrated (gitversion config migrate) run in v6 mode. Remove before GitVersion 7.1.
+      - name: 🧭 Detect GitVersion config layout
+        if: env.RELEASE_GITHUB_USE_GITVERSION != 'false'
+        shell: bash
+        run: |
+          for f in GitVersion.yml GitVersion.yaml .GitVersion.yml .GitVersion.yaml; do
+            [ -f "$f" ] || continue
+            if ! grep -qE '^(calculation|output):' "$f"; then
+              echo "::warning file=$f::GitVersion v6 config layout. Migrate with: gitversion config migrate --in-place"
+              echo "GITVERSION_CONFIGURATION_VERSION=v6" >> "$GITHUB_ENV"
+            fi
+            break
+          done
+
       - name: 🔢 Determine version
         if: env.RELEASE_GITHUB_USE_GITVERSION != 'false'
         id: gitversion
-        uses: gittools/actions/gitversion/execute@ed091b3e6bdfb74c563185b2bbff6782f68b8455
+        uses: gittools/actions/gitversion/execute@389fe43e6b0189b98c40c43553070ac029304635
 
       - name: 🔢 Fallback version calculation
         if: env.RELEASE_GITHUB_USE_GITVERSION == 'false'
@@ -375,8 +390,8 @@ jobs:
           echo "SemVer=$version" >> $GITHUB_OUTPUT
           echo "AssemblySemVer=$version" >> $GITHUB_OUTPUT
           echo "InformationalVersion=$version" >> $GITHUB_OUTPUT
-          echo "PreReleaseTag=" >> $GITHUB_OUTPUT
-          echo "CommitsSinceVersionSource=0" >> $GITHUB_OUTPUT
+          echo "PreReleaseLabel=" >> $GITHUB_OUTPUT
+          echo "VersionSourceDistance=0" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: 🏷️ Calculate tag and release names

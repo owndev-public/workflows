@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BADGE_REPO: ${{ inputs.badge_repo || vars.GITVERSION_BADGE_REPO }}
-      GITVERSION_VERSION_SPEC: ${{ inputs.gitversion_version_spec || vars.GITVERSION_VERSION_SPEC || '6.4.x' }}
+      GITVERSION_VERSION_SPEC: ${{ inputs.gitversion_version_spec || vars.GITVERSION_VERSION_SPEC || '7.x.x' }}
 
     steps:
       # ✅ Repository Checkout
@@ -107,7 +107,7 @@ jobs:
 
       # ✅ Install GitVersion
       - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@ed091b3e6bdfb74c563185b2bbff6782f68b8455
+        uses: gittools/actions/gitversion/setup@389fe43e6b0189b98c40c43553070ac029304635
         with:
           versionSpec: ${{ env.GITVERSION_VERSION_SPEC }}
           preferLatestVersion: true
@@ -128,10 +128,24 @@ jobs:
 
           echo "Badge repository configuration validated for $BADGE_REPO"
 
+      # shortcut: GitVersion 7 rejects the flat v6 GitVersion.yml layout; callers not yet
+      # migrated (gitversion config migrate) run in v6 mode. Remove before GitVersion 7.1.
+      - name: 🧭 Detect GitVersion config layout
+        shell: bash
+        run: |
+          for f in GitVersion.yml GitVersion.yaml .GitVersion.yml .GitVersion.yaml; do
+            [ -f "$f" ] || continue
+            if ! grep -qE '^(calculation|output):' "$f"; then
+              echo "::warning file=$f::GitVersion v6 config layout. Migrate with: gitversion config migrate --in-place"
+              echo "GITVERSION_CONFIGURATION_VERSION=v6" >> "$GITHUB_ENV"
+            fi
+            break
+          done
+
       # ✅ GitVersion Calculate
       - name: 🔍 Determine version
         id: gitversion
-        uses: gittools/actions/gitversion/execute@ed091b3e6bdfb74c563185b2bbff6782f68b8455
+        uses: gittools/actions/gitversion/execute@389fe43e6b0189b98c40c43553070ac029304635
 
       # ✅ GitFlow Branch Color and Name Logic
       - name: 🎨 Determine GitFlow Badge Configuration
@@ -294,9 +308,9 @@ jobs:
             echo "| **Assembly Version** | \`${{ steps.gitversion.outputs.assemblySemVer }}\` |"
             echo "| **Informational Version** | \`${{ steps.gitversion.outputs.informationalVersion }}\` |"
             echo "| **Major.Minor.Patch** | \`${{ steps.gitversion.outputs.majorMinorPatch }}\` |"
-            echo "| **PreRelease Label** | \`${{ steps.gitversion.outputs.preReleaseLabel }}\` |"
+            echo "| **PreRelease Label** | \`${{ steps.gitversion.outputs.preReleaseLabelName }}\` |"
             echo "| **PreRelease Number** | \`${{ steps.gitversion.outputs.preReleaseNumber }}\` |"
-            echo "| **Commits Since Version Source** | \`${{ steps.gitversion.outputs.commitsSinceVersionSource }}\` |"
+            echo "| **Commits Since Version Source** | \`${{ steps.gitversion.outputs.versionSourceDistance }}\` |"
             echo "| **Weighted PreRelease Number** | \`${{ steps.gitversion.outputs.weightedPreReleaseNumber }}\` |"
             echo "| **Branch Type** | \`${{ steps.gitversion.outputs.branchType }}\` |"
             echo "| **Branch Name** | \`${{ steps.gitversion.outputs.branchName }}\` |"
